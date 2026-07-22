@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { useState } from "react";
 import {
     AlertTriangle,
     ArrowDownUp,
@@ -6,91 +8,20 @@ import {
     Search,
     WalletCards,
 } from "lucide-react";
-import { useState } from "react";
 
-/*
- * يمثل بيانات مخزون منتج واحد.
- *
- * quantity:
- * الكمية المتوفرة بالوحدة المحددة في unit.
- *
- * minimumQuantity:
- * يستخدم داخليًا لتحديد حالة المخزون، ولا يظهر في الجدول.
- *
- * sellPriceIqd و purchasePriceUsd:
- * يمثلان سعر الوحدة الواحدة، سواء كانت مترًا مربعًا أو قطعة.
- */
-type InventoryItem = {
-    id: number;
-    code: string;
-    name: string;
-    quantity: number;
-    unit: "متر مربع" | "قطعة";
-    minimumQuantity: number;
-    sellPriceIqd: number;
-    purchasePriceUsd: number;
-};
 
-/*
- * بيانات مؤقتة لاختبار الواجهة.
- * سنستبدلها لاحقًا ببيانات قاعدة البيانات.
- */
-const inventoryItems: InventoryItem[] = [
-    {
-        id: 1,
-        code: "CER-001",
-        name: "سيراميك رخامي أبيض",
-        quantity: 126.5,
-        unit: "متر مربع",
-        minimumQuantity: 20,
-        sellPriceIqd: 18000,
-        purchasePriceUsd: 9.5,
-    },
-    {
-        id: 2,
-        code: "CER-002",
-        name: "بورسلان رمادي",
-        quantity: 14,
-        unit: "متر مربع",
-        minimumQuantity: 20,
-        sellPriceIqd: 25000,
-        purchasePriceUsd: 13,
-    },
-    {
-        id: 3,
-        code: "DEC-001",
-        name: "قطعة ديكور جدارية",
-        quantity: 36,
-        unit: "قطعة",
-        minimumQuantity: 10,
-        sellPriceIqd: 12000,
-        purchasePriceUsd: 6,
-    },
-    {
-        id: 4,
-        code: "DEC-002",
-        name: "قطعة زخرفة سيراميك",
-        quantity: 0,
-        unit: "قطعة",
-        minimumQuantity: 8,
-        sellPriceIqd: 15000,
-        purchasePriceUsd: 7.5,
-    },
-];
+import { useProducts } from "../context/ProductsContext";
+import type { Product } from "../types/product";
 
-/*
- * تحدد حالة المنتج اعتمادًا على كميته الحالية وحده الأدنى.
- * الحد الأدنى لا يظهر للمستخدم في الجدول.
- */
-function getStockStatus(item: InventoryItem) {
-    if (item.quantity === 0) {
+function getStockStatus(product: Product) {
+    if (product.quantity === 0) {
         return {
             label: "نافد",
             className: "bg-red-50 text-red-700",
         };
     }
 
-    if (item.quantity <= item.minimumQuantity) {
+    if (product.quantity <= product.minimumQuantity) {
         return {
             label: "منخفض",
             className: "bg-amber-50 text-amber-700",
@@ -104,59 +35,84 @@ function getStockStatus(item: InventoryItem) {
 }
 
 function InventoryPage() {
+    const { products } = useProducts();
+
     const [searchTerm, setSearchTerm] = useState("");
 
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const normalizedSearch =
+        searchTerm.trim().toLowerCase();
 
-    const filteredItems = inventoryItems.filter((item) => {
-        return (
-            item.code.toLowerCase().includes(normalizedSearch) ||
-            item.name.toLowerCase().includes(normalizedSearch)
+    const filteredProducts = products.filter(
+        (product) => {
+            return (
+                product.code
+                    .toLowerCase()
+                    .includes(normalizedSearch) ||
+                product.name
+                    .toLowerCase()
+                    .includes(normalizedSearch)
+            );
+        },
+    );
+
+    const totalSquareMeters = products
+        .filter(
+            (product) => product.unit === "متر مربع",
+        )
+        .reduce(
+            (total, product) =>
+                total + product.quantity,
+            0,
         );
-    });
 
-    /*
-     * نجمع كميات المتر المربع منفصلة عن القطع،
-     * لأن جمع وحدتين مختلفتين في رقم واحد غير صحيح.
-     */
-    const totalSquareMeters = inventoryItems
-        .filter((item) => item.unit === "متر مربع")
-        .reduce((total, item) => total + item.quantity, 0);
+    const totalPieces = products
+        .filter((product) => product.unit === "قطعة")
+        .reduce(
+            (total, product) =>
+                total + product.quantity,
+            0,
+        );
 
-    const totalPieces = inventoryItems
-        .filter((item) => item.unit === "قطعة")
-        .reduce((total, item) => total + item.quantity, 0);
+    const lowStockCount = products.filter(
+        (product) => {
+            return (
+                product.quantity <= product.minimumQuantity
+            );
+        },
+    ).length;
 
-    // عدد المنتجات المنخفضة أو النافدة.
-    const lowStockCount = inventoryItems.filter((item) => {
-        return item.quantity <= item.minimumQuantity;
-    }).length;
+    const totalSellingValueIqd = products.reduce(
+        (total, product) => {
+            return (
+                total +
+                product.quantity * product.sellPriceIqd
+            );
+        },
+        0,
+    );
 
-    /*
-     * قيمة المخزون الكلية بسعر البيع بالدينار:
-     * نجمع كمية كل منتج مضروبة في سعر بيع وحدته.
-     */
-    const totalSellingValueIqd = inventoryItems.reduce((total, item) => {
-        return total + item.quantity * item.sellPriceIqd;
-    }, 0);
-
-    /*
-     * قيمة المخزون الكلية بسعر الشراء بالدولار:
-     * نجمع كمية كل منتج مضروبة في سعر شراء وحدته.
-     */
-    const totalPurchaseValueUsd = inventoryItems.reduce((total, item) => {
-        return total + item.quantity * item.purchasePriceUsd;
-    }, 0);
+    const totalPurchaseValueUsd = products.reduce(
+        (total, product) => {
+            return (
+                total +
+                product.quantity *
+                product.purchasePriceUsd
+            );
+        },
+        0,
+    );
 
     return (
         <section>
-            {/* عنوان الصفحة وزر تسجيل حركة مخزون */}
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h3 className="text-2xl font-bold">المخزون</h3>
+                    <h3 className="text-2xl font-bold">
+                        المخزون
+                    </h3>
 
                     <p className="mt-1 text-sm text-slate-500">
-                        متابعة الكميات المتوفرة وقيمة مخزون المعرض.
+                        متابعة الكميات المتوفرة وقيمة مخزون
+                        المعرض.
                     </p>
                 </div>
 
@@ -169,104 +125,62 @@ function InventoryPage() {
                 </button>
             </div>
 
-            {/* ملخص المخزون */}
             <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">إجمالي المساحة</p>
+                <InventorySummaryCard
+                    label="إجمالي المساحة"
+                    value={totalSquareMeters.toLocaleString(
+                        "ar-IQ",
+                    )}
+                    unit="متر مربع"
+                    icon={<Boxes size={22} />}
+                    iconClassName="bg-slate-100 text-slate-700"
+                />
 
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalSquareMeters.toLocaleString("ar-IQ")}
-                            </p>
+                <InventorySummaryCard
+                    label="إجمالي القطع"
+                    value={totalPieces.toLocaleString("ar-IQ")}
+                    unit="قطعة"
+                    icon={<Boxes size={22} />}
+                    iconClassName="bg-slate-100 text-slate-700"
+                />
 
-                            <p className="mt-1 text-sm text-slate-500">متر مربع</p>
-                        </div>
+                <InventorySummaryCard
+                    label="منخفض أو نافد"
+                    value={lowStockCount.toLocaleString(
+                        "ar-IQ",
+                    )}
+                    unit="منتج"
+                    icon={<AlertTriangle size={22} />}
+                    iconClassName="bg-amber-50 text-amber-700"
+                />
 
-                        <div className="rounded-xl bg-slate-100 p-3 text-slate-700">
-                            <Boxes size={22} />
-                        </div>
-                    </div>
-                </article>
+                <InventorySummaryCard
+                    label="القيمة بسعر البيع"
+                    value={totalSellingValueIqd.toLocaleString(
+                        "ar-IQ",
+                    )}
+                    unit="دينار عراقي"
+                    icon={<WalletCards size={22} />}
+                    iconClassName="bg-emerald-50 text-emerald-700"
+                />
 
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">إجمالي القطع</p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalPieces.toLocaleString("ar-IQ")}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">قطعة</p>
-                        </div>
-
-                        <div className="rounded-xl bg-slate-100 p-3 text-slate-700">
-                            <Boxes size={22} />
-                        </div>
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">منخفض أو نافد</p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {lowStockCount.toLocaleString("ar-IQ")}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">منتج</p>
-                        </div>
-
-                        <div className="rounded-xl bg-amber-50 p-3 text-amber-700">
-                            <AlertTriangle size={22} />
-                        </div>
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">القيمة بسعر البيع</p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalSellingValueIqd.toLocaleString("ar-IQ")}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">دينار عراقي</p>
-                        </div>
-
-                        <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700">
-                            <WalletCards size={22} />
-                        </div>
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2 xl:col-span-1">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">القيمة بسعر الشراء</p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalPurchaseValueUsd.toLocaleString("en-US", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                })}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">دولار أمريكي</p>
-                        </div>
-
-                        <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
-                            <CircleDollarSign size={22} />
-                        </div>
-                    </div>
-                </article>
+                <InventorySummaryCard
+                    label="القيمة بسعر الشراء"
+                    value={totalPurchaseValueUsd.toLocaleString(
+                        "en-US",
+                        {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                        },
+                    )}
+                    unit="دولار أمريكي"
+                    icon={<CircleDollarSign size={22} />}
+                    iconClassName="bg-blue-50 text-blue-700"
+                    className="sm:col-span-2 xl:col-span-1"
+                />
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {/* البحث بالكود أو الاسم */}
                 <div className="border-b border-slate-200 p-4 sm:p-5">
                     <div className="relative max-w-md">
                         <Search
@@ -277,25 +191,39 @@ function InventoryPage() {
                         <input
                             type="search"
                             value={searchTerm}
-                            onChange={(event) => setSearchTerm(event.target.value)}
+                            onChange={(event) =>
+                                setSearchTerm(event.target.value)
+                            }
                             placeholder="ابحث بالكود أو اسم المنتج"
                             className="w-full rounded-xl border border-slate-200 py-3 pr-10 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                         />
                     </div>
                 </div>
 
-                {/* جدول المخزون */}
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] text-right text-sm">
                         <thead className="bg-slate-50 text-slate-600">
                             <tr>
-                                <th className="px-5 py-4 font-semibold">الكود</th>
-                                <th className="px-5 py-4 font-semibold">المنتج</th>
-                                <th className="px-5 py-4 font-semibold">الكمية المتوفرة</th>
-                                <th className="px-5 py-4 font-semibold">الحالة</th>
+                                <th className="px-5 py-4 font-semibold">
+                                    الكود
+                                </th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    المنتج
+                                </th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    الكمية المتوفرة
+                                </th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    الحالة
+                                </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     القيمة بسعر البيع
                                 </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     القيمة بسعر الشراء
                                 </th>
@@ -303,25 +231,37 @@ function InventoryPage() {
                         </thead>
 
                         <tbody className="divide-y divide-slate-100">
-                            {filteredItems.map((item) => {
-                                const stockStatus = getStockStatus(item);
+                            {filteredProducts.map((product) => {
+                                const stockStatus =
+                                    getStockStatus(product);
 
-                                const sellingValue = item.quantity * item.sellPriceIqd;
-                                const purchaseValue = item.quantity * item.purchasePriceUsd;
+                                const sellingValue =
+                                    product.quantity *
+                                    product.sellPriceIqd;
+
+                                const purchaseValue =
+                                    product.quantity *
+                                    product.purchasePriceUsd;
 
                                 return (
                                     <tr
-                                        key={item.id}
+                                        key={product.id}
                                         className="transition hover:bg-slate-50"
                                     >
-                                        <td className="px-5 py-4 font-medium">{item.code}</td>
+                                        <td className="px-5 py-4 font-medium">
+                                            {product.code}
+                                        </td>
 
-                                        <td className="px-5 py-4">{item.name}</td>
+                                        <td className="px-5 py-4">
+                                            {product.name}
+                                        </td>
 
                                         <td className="px-5 py-4 font-semibold">
-                                            {item.quantity.toLocaleString("ar-IQ")}{" "}
+                                            {product.quantity.toLocaleString(
+                                                "ar-IQ",
+                                            )}{" "}
                                             <span className="font-normal text-slate-500">
-                                                {item.unit}
+                                                {product.unit}
                                             </span>
                                         </td>
 
@@ -337,15 +277,21 @@ function InventoryPage() {
                                         </td>
 
                                         <td className="px-5 py-4 font-semibold">
-                                            {sellingValue.toLocaleString("ar-IQ")} د.ع
+                                            {sellingValue.toLocaleString(
+                                                "ar-IQ",
+                                            )}{" "}
+                                            د.ع
                                         </td>
 
                                         <td className="px-5 py-4 font-semibold">
                                             $
-                                            {purchaseValue.toLocaleString("en-US", {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            })}
+                                            {purchaseValue.toLocaleString(
+                                                "en-US",
+                                                {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                },
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -354,9 +300,11 @@ function InventoryPage() {
                     </table>
                 </div>
 
-                {filteredItems.length === 0 && (
+                {filteredProducts.length === 0 && (
                     <div className="px-5 py-16 text-center">
-                        <p className="font-semibold">لا توجد عناصر مخزون مطابقة</p>
+                        <p className="font-semibold">
+                            لا توجد عناصر مخزون مطابقة
+                        </p>
 
                         <p className="mt-1 text-sm text-slate-500">
                             جرّب البحث بكود أو اسم مختلف.
@@ -365,6 +313,58 @@ function InventoryPage() {
                 )}
             </div>
         </section>
+    );
+}
+
+type InventorySummaryCardProps = {
+    label: string;
+    value: string;
+    unit: string;
+    icon: ReactNode;
+    iconClassName: string;
+    className?: string;
+};
+
+function InventorySummaryCard({
+    label,
+    value,
+    unit,
+    icon,
+    iconClassName,
+    className = "",
+}: InventorySummaryCardProps) {
+    return (
+        <article
+            className={[
+                "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm",
+                className,
+            ].join(" ")}
+        >
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <p className="text-sm text-slate-500">
+                        {label}
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold">
+                        {value}
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                        {unit}
+                    </p>
+                </div>
+
+                <div
+                    className={[
+                        "rounded-xl p-3",
+                        iconClassName,
+                    ].join(" ")}
+                >
+                    {icon}
+                </div>
+            </div>
+        </article>
     );
 }
 
