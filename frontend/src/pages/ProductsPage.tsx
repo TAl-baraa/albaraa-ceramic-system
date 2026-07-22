@@ -1,12 +1,12 @@
-import { Plus, Search, X } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 
 /*
- * يحدد شكل بيانات المنتج داخل التطبيق.
+ * شكل بيانات المنتج داخل التطبيق.
  *
- * الوحدة لا يمكن أن تكون إلا مترًا مربعًا أو قطعة.
- * أسعار البيع والشراء مخزنة كأرقام لإجراء العمليات الحسابية عليها.
+ * initialQuantity تمثل الرصيد الافتتاحي المؤقت.
+ * لاحقًا ستتحول في قاعدة البيانات إلى حركة مخزون افتتاحية.
  */
 type Product = {
     id: number;
@@ -15,14 +15,14 @@ type Product = {
     size: string;
     company: string;
     unit: "متر مربع" | "قطعة";
+    initialQuantity: number;
     sellPriceIqd: number;
     purchasePriceUsd: number;
-    initialQuantity: number;
 };
 
 /*
- * منتجات مؤقتة لاختبار الواجهة.
- * ستأتي هذه البيانات لاحقًا من قاعدة البيانات.
+ * بيانات مؤقتة لاختبار الواجهة.
+ * ستأتي المنتجات لاحقًا من الخادم وقاعدة البيانات.
  */
 const initialProducts: Product[] = [
     {
@@ -32,9 +32,9 @@ const initialProducts: Product[] = [
         size: "60×60",
         company: "شركة النور",
         unit: "متر مربع",
+        initialQuantity: 126.5,
         sellPriceIqd: 18000,
         purchasePriceUsd: 9.5,
-        initialQuantity: 126.5,
     },
     {
         id: 2,
@@ -43,49 +43,61 @@ const initialProducts: Product[] = [
         size: "120×60",
         company: "شركة الرافدين",
         unit: "متر مربع",
+        initialQuantity: 14,
         sellPriceIqd: 25000,
         purchasePriceUsd: 13,
-        initialQuantity: 14,
     },
 ];
 
 function ProductsPage() {
-    /*
-     * قائمة المنتجات الحالية.
-     * استخدام useState يسمح بإضافة منتجات جديدة وتحديث الجدول.
-     */
-    const [products, setProducts] = useState<Product[]>(initialProducts);
+    // قائمة المنتجات المعروضة حاليًا.
+    const [products, setProducts] =
+        useState<Product[]>(initialProducts);
 
-    // النص المكتوب داخل حقل البحث.
+    // النص المكتوب في حقل البحث.
     const [searchTerm, setSearchTerm] = useState("");
 
-    // تحدد هل نافذة إضافة المنتج مفتوحة أم مغلقة.
-    const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+    // تحدد ظهور نافذة إضافة أو تعديل المنتج.
+    const [isProductDialogOpen, setIsProductDialogOpen] =
+        useState(false);
 
-    // رسالة الخطأ التي تظهر داخل نموذج إضافة المنتج.
+    /*
+     * إذا كانت القيمة null فنحن في وضع الإضافة.
+     * وجود منتج يعني أننا في وضع تعديل ذلك المنتج.
+     */
+    const [productToEdit, setProductToEdit] =
+        useState<Product | null>(null);
+
+    /*
+     * المنتج المحدد للحذف.
+     * null تعني أن نافذة تأكيد الحذف مغلقة.
+     */
+    const [productToDelete, setProductToDelete] =
+        useState<Product | null>(null);
+
+    // رسالة التحقق التي تظهر أسفل حقول النموذج.
     const [formError, setFormError] = useState("");
 
-    // حالات حقول نموذج إضافة المنتج.
+    // حالات حقول نموذج المنتج.
     const [productCode, setProductCode] = useState("");
     const [productName, setProductName] = useState("");
     const [productSize, setProductSize] = useState("");
     const [productCompany, setProductCompany] = useState("");
-    // الكمية التي يدخل بها المنتج إلى المخزون عند إنشائه.
-    const [initialQuantity, setInitialQuantity] = useState("0");
 
     const [productUnit, setProductUnit] = useState<
         "متر مربع" | "قطعة"
     >("متر مربع");
 
     /*
-     * حقول الأسعار مخزنة مؤقتًا كنصوص؛ لأن قيمة input تصل كنص.
-     * نحولها إلى أرقام عند حفظ المنتج.
+     * قيم حقول الأرقام تحفظ كنصوص أثناء الكتابة؛
+     * لأن عناصر input تعيد event.target.value كنص.
      */
+    const [initialQuantity, setInitialQuantity] = useState("0");
     const [sellPriceIqd, setSellPriceIqd] = useState("");
     const [purchasePriceUsd, setPurchasePriceUsd] = useState("");
 
     /*
-     * تفرغ جميع حقول النموذج وتعيدها إلى قيمها الابتدائية.
+     * تفريغ حقول النموذج وإعادتها إلى قيمها الافتراضية.
      */
     function resetProductForm() {
         setProductCode("");
@@ -100,75 +112,148 @@ function ProductsPage() {
     }
 
     /*
-     * تغلق نافذة إضافة المنتج وتفرغ الحقول.
-     * وضعناها في دالة مستقلة كي نستخدمها في عدة أزرار.
+     * فتح النافذة في وضع إضافة منتج جديد.
      */
-    function closeAddProductDialog() {
+    function openAddProductDialog() {
+        setProductToEdit(null);
         resetProductForm();
-        setIsAddProductOpen(false);
+        setIsProductDialogOpen(true);
     }
 
     /*
-     * تتحقق من بيانات النموذج، ثم تضيف المنتج إلى القائمة.
+     * فتح النافذة في وضع التعديل ونسخ بيانات المنتج
+     * المحدد إلى حقول النموذج.
      */
-    function handleAddProduct(event: FormEvent<HTMLFormElement>) {
-        // منع النموذج من إعادة تحميل الصفحة.
+    function openEditProductDialog(product: Product) {
+        setProductToEdit(product);
+
+        setProductCode(product.code);
+        setProductName(product.name);
+        setProductSize(product.size);
+        setProductCompany(product.company);
+        setProductUnit(product.unit);
+        setInitialQuantity(product.initialQuantity.toString());
+        setSellPriceIqd(product.sellPriceIqd.toString());
+        setPurchasePriceUsd(product.purchasePriceUsd.toString());
+
+        setFormError("");
+        setIsProductDialogOpen(true);
+    }
+
+    /*
+     * إغلاق نافذة المنتج وإعادتها إلى وضع الإضافة.
+     */
+    function closeProductDialog() {
+        setIsProductDialogOpen(false);
+        setProductToEdit(null);
+        resetProductForm();
+    }
+
+    /*
+     * حذف المنتج المحدد من القائمة.
+     */
+    function handleDeleteProduct() {
+        if (!productToDelete) {
+            return;
+        }
+
+        setProducts((currentProducts) => {
+            return currentProducts.filter((product) => {
+                return product.id !== productToDelete.id;
+            });
+        });
+
+        setProductToDelete(null);
+    }
+
+    /*
+     * التحقق من حقول النموذج ثم إضافة المنتج أو تعديله.
+     */
+    function handleProductSubmit(
+        event: FormEvent<HTMLFormElement>,
+    ) {
+        // منع المتصفح من إعادة تحميل الصفحة عند إرسال النموذج.
         event.preventDefault();
 
-        /*
-         * تنظيف القيم قبل فحصها وحفظها.
-         * نحول الكود إلى أحرف كبيرة لتوحيد طريقة تخزين الأكواد.
-         */
+        // تنظيف النصوص قبل التحقق والحفظ.
         const normalizedCode = productCode.trim().toUpperCase();
         const normalizedName = productName.trim();
         const normalizedSize = productSize.trim();
         const normalizedCompany = productCompany.trim();
 
+        // تحويل قيم الحقول الرقمية من نصوص إلى أرقام.
+        const numericInitialQuantity = Number(initialQuantity);
         const numericSellPriceIqd = Number(sellPriceIqd);
         const numericPurchasePriceUsd = Number(purchasePriceUsd);
-        const numericInitialQuantity = Number(initialQuantity);
-        // التحقق من تعبئة جميع الحقول المطلوبة.
+
+        // التحقق من تعبئة الحقول المطلوبة.
         if (
             !normalizedCode ||
             !normalizedName ||
             !normalizedSize ||
             !normalizedCompany ||
-            !sellPriceIqd ||
-            !purchasePriceUsd
+            sellPriceIqd.trim() === "" ||
+            purchasePriceUsd.trim() === ""
         ) {
             setFormError("يرجى تعبئة جميع الحقول المطلوبة.");
             return;
         }
 
-        /*
-         * التحقق من أن الأسعار أرقام صحيحة أكبر من الصفر.
-         * Number.isFinite يمنع القيم غير الرقمية وغير الصالحة.
-         */
+        // التحقق من صحة أسعار البيع والشراء.
         if (
             !Number.isFinite(numericSellPriceIqd) ||
             !Number.isFinite(numericPurchasePriceUsd) ||
             numericSellPriceIqd <= 0 ||
             numericPurchasePriceUsd <= 0
         ) {
-            setFormError("يجب أن تكون أسعار البيع والشراء أكبر من صفر.");
+            setFormError(
+                "يجب أن تكون أسعار البيع والشراء أرقامًا أكبر من صفر.",
+            );
             return;
         }
 
         /*
- * الكمية الابتدائية اختيارية، لذلك يسمح بالصفر،
- * لكنها لا يمكن أن تكون سالبة أو قيمة غير رقمية.
- */
+         * الكمية الافتتاحية يمكن أن تكون صفرًا،
+         * لكنها لا يمكن أن تكون سالبة.
+         */
         if (
             !Number.isFinite(numericInitialQuantity) ||
             numericInitialQuantity < 0
         ) {
-            setFormError("يجب أن تكون الكمية الابتدائية صفرًا أو رقمًا موجبًا.");
+            setFormError(
+                "يجب أن تكون الكمية الابتدائية صفرًا أو رقمًا موجبًا.",
+            );
             return;
         }
 
-        // التحقق من عدم وجود منتج آخر يحمل الكود نفسه.
+        /*
+         * المنتجات التي تقاس بالقطعة يجب أن تحتوي
+         * على عدد صحيح، ولا يجوز إدخال نصف قطعة.
+         */
+        if (
+            productUnit === "قطعة" &&
+            !Number.isInteger(numericInitialQuantity)
+        ) {
+            setFormError(
+                "يجب أن تكون كمية المنتجات المقاسة بالقطعة عددًا صحيحًا.",
+            );
+            return;
+        }
+
+        /*
+         * البحث عن منتج آخر يحمل الكود نفسه.
+         *
+         * عند التعديل نستثني المنتج الجاري تعديله،
+         * حتى يستطيع الاحتفاظ بكوده الحالي.
+         */
         const codeAlreadyExists = products.some((product) => {
-            return product.code.toUpperCase() === normalizedCode;
+            const hasSameCode =
+                product.code.toUpperCase() === normalizedCode;
+
+            const isDifferentProduct =
+                product.id !== productToEdit?.id;
+
+            return hasSameCode && isDifferentProduct;
         });
 
         if (codeAlreadyExists) {
@@ -176,13 +261,12 @@ function ProductsPage() {
             return;
         }
 
-        // إنشاء المنتج الجديد من القيم المدخلة.
-        const newProduct: Product = {
-            /*
-             * معرف مؤقت يعتمد على الوقت الحالي.
-             * لاحقًا ستنشئ قاعدة البيانات المعرف الحقيقي.
-             */
-            id: Date.now(),
+        /*
+         * البيانات المشتركة بين عمليتي الإضافة والتعديل.
+         * لا تحتوي على id لأن المعرف يعالج بصورة مختلفة
+         * في كل عملية.
+         */
+        const productData: Omit<Product, "id"> = {
             code: normalizedCode,
             name: normalizedName,
             size: normalizedSize,
@@ -193,27 +277,49 @@ function ProductsPage() {
             purchasePriceUsd: numericPurchasePriceUsd,
         };
 
-        /*
-         * نضيف المنتج الجديد في بداية المصفوفة
-         * حتى يظهر مباشرة في أعلى الجدول.
-         */
-        setProducts((currentProducts) => [
-            newProduct,
-            ...currentProducts,
-        ]);
+        if (productToEdit) {
+            /*
+             * وضع التعديل:
+             * نستبدل بيانات المنتج الذي يملك المعرف نفسه،
+             * ونترك بقية المنتجات دون تغيير.
+             */
+            setProducts((currentProducts) => {
+                return currentProducts.map((product) => {
+                    if (product.id === productToEdit.id) {
+                        return {
+                            id: product.id,
+                            ...productData,
+                        };
+                    }
 
-        // إغلاق النافذة وتفريغ النموذج بعد نجاح الإضافة.
-        closeAddProductDialog();
+                    return product;
+                });
+            });
+        } else {
+            /*
+             * وضع الإضافة:
+             * ننشئ معرفًا مؤقتًا ونضيف المنتج أعلى الجدول.
+             */
+            const newProduct: Product = {
+                id: Date.now(),
+                ...productData,
+            };
+
+            setProducts((currentProducts) => [
+                newProduct,
+                ...currentProducts,
+            ]);
+        }
+
+        closeProductDialog();
     }
 
-    /*
-     * تنظيف عبارة البحث مرة واحدة، ثم استخدامها أثناء التصفية.
-     */
+    // تنظيف نص البحث لتسهيل المقارنة.
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     /*
-     * تعرض المنتجات التي يحتوي كودها أو اسمها على عبارة البحث.
-     * عند كون البحث فارغًا، تعرض جميع المنتجات.
+     * تصفية المنتجات حسب الكود أو الاسم.
+     * إذا كان حقل البحث فارغًا فستظهر جميع المنتجات.
      */
     const filteredProducts = products.filter((product) => {
         return (
@@ -224,7 +330,7 @@ function ProductsPage() {
 
     return (
         <section>
-            {/* رأس الصفحة: العنوان وزر إضافة منتج */}
+            {/* رأس صفحة المنتجات */}
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-2xl font-bold">المنتجات</h3>
@@ -236,7 +342,7 @@ function ProductsPage() {
 
                 <button
                     type="button"
-                    onClick={() => setIsAddProductOpen(true)}
+                    onClick={openAddProductDialog}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
                 >
                     <Plus size={18} />
@@ -256,7 +362,9 @@ function ProductsPage() {
                         <input
                             type="search"
                             value={searchTerm}
-                            onChange={(event) => setSearchTerm(event.target.value)}
+                            onChange={(event) =>
+                                setSearchTerm(event.target.value)
+                            }
                             placeholder="ابحث بالكود أو اسم المنتج"
                             className="w-full rounded-xl border border-slate-200 py-3 pr-10 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                         />
@@ -265,26 +373,41 @@ function ProductsPage() {
 
                 {/* جدول المنتجات */}
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1000px] text-right text-sm">
+                    <table className="w-full min-w-[1100px] text-right text-sm">
                         <thead className="bg-slate-50 text-slate-600">
                             <tr>
                                 <th className="px-5 py-4 font-semibold">الكود</th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     اسم المنتج
                                 </th>
-                                <th className="px-5 py-4 font-semibold">القياس</th>
-                                <th className="px-5 py-4 font-semibold">الشركة</th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    القياس
+                                </th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    الشركة
+                                </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     وحدة المخزون
                                 </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     الكمية الابتدائية
                                 </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     سعر البيع
                                 </th>
+
                                 <th className="px-5 py-4 font-semibold">
                                     سعر الشراء
+                                </th>
+
+                                <th className="px-5 py-4 font-semibold">
+                                    الإجراءات
                                 </th>
                             </tr>
                         </thead>
@@ -299,7 +422,9 @@ function ProductsPage() {
                                         {product.code}
                                     </td>
 
-                                    <td className="px-5 py-4">{product.name}</td>
+                                    <td className="px-5 py-4">
+                                        {product.name}
+                                    </td>
 
                                     <td className="px-5 py-4 text-slate-600">
                                         {product.size}
@@ -314,23 +439,58 @@ function ProductsPage() {
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
-                                        {product.initialQuantity.toLocaleString("ar-IQ")}{" "}
+                                        {product.initialQuantity.toLocaleString(
+                                            "ar-IQ",
+                                        )}{" "}
                                         <span className="font-normal text-slate-500">
                                             {product.unit}
                                         </span>
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
-                                        {product.sellPriceIqd.toLocaleString("ar-IQ")}{" "}
+                                        {product.sellPriceIqd.toLocaleString(
+                                            "ar-IQ",
+                                        )}{" "}
                                         د.ع
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
                                         $
-                                        {product.purchasePriceUsd.toLocaleString("en-US", {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                        })}
+                                        {product.purchasePriceUsd.toLocaleString(
+                                            "en-US",
+                                            {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                            },
+                                        )}
+                                    </td>
+
+                                    <td className="px-5 py-4">
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    openEditProductDialog(product)
+                                                }
+                                                className="inline-flex items-center justify-center rounded-lg p-2 text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                                                aria-label={`تعديل المنتج ${product.name}`}
+                                                title="تعديل المنتج"
+                                            >
+                                                <Pencil size={18} />
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setProductToDelete(product)
+                                                }
+                                                className="inline-flex items-center justify-center rounded-lg p-2 text-red-600 transition hover:bg-red-50 hover:text-red-700"
+                                                aria-label={`حذف المنتج ${product.name}`}
+                                                title="حذف المنتج"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -338,10 +498,12 @@ function ProductsPage() {
                     </table>
                 </div>
 
-                {/* تظهر عند عدم وجود نتائج مطابقة للبحث */}
+                {/* حالة عدم وجود نتائج */}
                 {filteredProducts.length === 0 && (
                     <div className="px-5 py-16 text-center">
-                        <p className="font-semibold">لا توجد منتجات مطابقة</p>
+                        <p className="font-semibold">
+                            لا توجد منتجات مطابقة
+                        </p>
 
                         <p className="mt-1 text-sm text-slate-500">
                             جرّب البحث بكود أو اسم مختلف.
@@ -350,54 +512,58 @@ function ProductsPage() {
                 )}
             </div>
 
-            {/* نافذة إضافة المنتج */}
-            {isAddProductOpen && (
+            {/* نافذة إضافة أو تعديل المنتج */}
+            {isProductDialogOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    {/*
-           * خلفية النافذة.
-           * الضغط عليها يغلق النافذة ويفرغ الحقول.
-           */}
+                    {/* الخلفية المعتمة */}
                     <button
                         type="button"
-                        aria-label="إغلاق نافذة إضافة المنتج"
-                        onClick={closeAddProductDialog}
+                        aria-label="إغلاق نافذة المنتج"
+                        onClick={closeProductDialog}
                         className="absolute inset-0 bg-slate-950/50"
                     />
 
-                    {/* المحتوى الفعلي للنافذة */}
+                    {/* محتوى النافذة */}
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-labelledby="add-product-title"
+                        aria-labelledby="product-dialog-title"
                         className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
                     >
                         {/* رأس النافذة */}
                         <div className="flex items-center justify-between border-b border-slate-200 p-5">
                             <div>
                                 <h4
-                                    id="add-product-title"
+                                    id="product-dialog-title"
                                     className="text-lg font-bold"
                                 >
-                                    إضافة منتج جديد
+                                    {productToEdit
+                                        ? "تعديل المنتج"
+                                        : "إضافة منتج جديد"}
                                 </h4>
 
                                 <p className="mt-1 text-sm text-slate-500">
-                                    أدخل المعلومات الأساسية للمنتج.
+                                    {productToEdit
+                                        ? "عدّل المعلومات المطلوبة ثم احفظ التغييرات."
+                                        : "أدخل المعلومات الأساسية للمنتج."}
                                 </p>
                             </div>
 
                             <button
                                 type="button"
                                 aria-label="إغلاق"
-                                onClick={closeAddProductDialog}
+                                onClick={closeProductDialog}
                                 className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* نموذج إضافة المنتج */}
-                        <form onSubmit={handleAddProduct} className="p-5">
+                        {/* نموذج المنتج */}
+                        <form
+                            onSubmit={handleProductSubmit}
+                            className="p-5"
+                        >
                             <div className="grid gap-5 md:grid-cols-2">
                                 <label className="grid gap-2">
                                     <span className="text-sm font-semibold">
@@ -486,7 +652,10 @@ function ProductsPage() {
                                         }}
                                         className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                                     >
-                                        <option value="متر مربع">متر مربع</option>
+                                        <option value="متر مربع">
+                                            متر مربع
+                                        </option>
+
                                         <option value="قطعة">قطعة</option>
                                     </select>
                                 </label>
@@ -499,7 +668,11 @@ function ProductsPage() {
                                     <input
                                         type="number"
                                         min="0"
-                                        step={productUnit === "متر مربع" ? "0.01" : "1"}
+                                        step={
+                                            productUnit === "متر مربع"
+                                                ? "0.01"
+                                                : "1"
+                                        }
                                         value={initialQuantity}
                                         onChange={(event) => {
                                             setInitialQuantity(event.target.value);
@@ -553,7 +726,7 @@ function ProductsPage() {
                                 </label>
                             </div>
 
-                            {/* رسالة التحقق من الحقول */}
+                            {/* رسالة التحقق */}
                             {formError && (
                                 <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                                     {formError}
@@ -564,7 +737,7 @@ function ProductsPage() {
                             <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-5">
                                 <button
                                     type="button"
-                                    onClick={closeAddProductDialog}
+                                    onClick={closeProductDialog}
                                     className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                                 >
                                     إلغاء
@@ -574,10 +747,71 @@ function ProductsPage() {
                                     type="submit"
                                     className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
                                 >
-                                    حفظ المنتج
+                                    {productToEdit
+                                        ? "حفظ التعديلات"
+                                        : "حفظ المنتج"}
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* نافذة تأكيد الحذف */}
+            {productToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <button
+                        type="button"
+                        aria-label="إغلاق نافذة تأكيد الحذف"
+                        onClick={() => setProductToDelete(null)}
+                        className="absolute inset-0 bg-slate-950/50"
+                    />
+
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="delete-product-title"
+                        className="relative z-10 w-full max-w-md rounded-2xl bg-white shadow-xl"
+                    >
+                        <div className="border-b border-slate-200 p-5">
+                            <h4
+                                id="delete-product-title"
+                                className="text-lg font-bold text-red-700"
+                            >
+                                حذف المنتج
+                            </h4>
+
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                هل أنت متأكد من حذف المنتج{" "}
+                                <span className="font-bold text-slate-900">
+                                    {productToDelete.name}
+                                </span>
+                                ؟
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                                الكود: {productToDelete.code}
+                            </p>
+                        </div>
+
+                        <div className="flex justify-end gap-3 p-5">
+                            <button
+                                type="button"
+                                onClick={() => setProductToDelete(null)}
+                                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                            >
+                                إلغاء
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleDeleteProduct}
+                                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                            >
+                                <Trash2 size={17} />
+                                <span>تأكيد الحذف</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
