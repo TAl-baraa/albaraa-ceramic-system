@@ -1,0 +1,30 @@
+# حزم Node.js؛ يعاد تنزيلها بواسطة npm install
+node_modules/
+
+# ناتج بناء الواجهة
+dist/
+
+# ملفات البيئة التي قد تحتوي كلمات مرور ومفاتيح
+.env
+.env.*
+!.env.example
+
+# ملفات السجلات
+*.log
+npm-debug.log*
+
+# ملفات المحررات وأنظمة التشغيل
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ملفات Python المستقبلية
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# النسخ الاحتياطية والملفات المرفوعة محليًا
+backups/
+uploads/
