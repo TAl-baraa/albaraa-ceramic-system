@@ -8,12 +8,22 @@ import type { ReactNode } from "react";
 
 import { initialProducts } from "../data/initialProducts";
 import type { Product, ProductUnit } from "../types/product";
+import type {
+    AddStockMovementResult,
+    StockMovement,
+    StockMovementInput,
+    StockMovementType,
+} from "../types/stockMovement";
 
 type ProductsContextValue = {
     products: Product[];
     addProduct: (product: Product) => void;
     updateProduct: (product: Product) => void;
     deleteProduct: (productId: number) => void;
+    stockMovements: StockMovement[];
+    addStockMovement: (
+        movement: StockMovementInput,
+    ) => AddStockMovementResult;
 };
 
 type ProductsProviderProps = {
@@ -25,6 +35,7 @@ type StoredProduct = Partial<Product> & {
 };
 
 const STORAGE_KEY = "albaraa-ceramic-products";
+const MOVEMENTS_STORAGE_KEY = "albaraa-ceramic-stock-movements";
 const ProductsContext =
     createContext<ProductsContextValue | null>(null);
 
@@ -42,6 +53,47 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
 
 function isProductUnit(value: unknown): value is ProductUnit {
     return value === "متر مربع" || value === "قطعة";
+}
+
+function isStockMovementType(
+    value: unknown,
+): value is StockMovementType {
+    return (
+        value === "in" ||
+        value === "out" ||
+        value === "adjustment"
+    );
+}
+
+function parseStoredMovement(value: unknown): StockMovement | null {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    if (
+        !isFiniteNonNegativeNumber(value.id) ||
+        !isFiniteNonNegativeNumber(value.productId) ||
+        !isStockMovementType(value.type) ||
+        !isFiniteNonNegativeNumber(value.quantity) ||
+        !isFiniteNonNegativeNumber(value.previousQuantity) ||
+        !isFiniteNonNegativeNumber(value.newQuantity) ||
+        typeof value.note !== "string" ||
+        typeof value.createdAt !== "string" ||
+        !Number.isFinite(Date.parse(value.createdAt))
+    ) {
+        return null;
+    }
+
+    return {
+        id: value.id,
+        productId: value.productId,
+        type: value.type,
+        quantity: value.quantity,
+        previousQuantity: value.previousQuantity,
+        newQuantity: value.newQuantity,
+        note: value.note,
+        createdAt: value.createdAt,
+    };
 }
 
 function migrateStoredProduct(value: unknown): Product | null {
@@ -108,11 +160,49 @@ function getStoredProducts(): Product[] {
     }
 }
 
+function getStoredMovements(): StockMovement[] {
+    try {
+        const storedValue = localStorage.getItem(
+            MOVEMENTS_STORAGE_KEY,
+        );
+
+        if (!storedValue) {
+            return [];
+        }
+
+        const parsedValue: unknown = JSON.parse(storedValue);
+
+        if (!Array.isArray(parsedValue)) {
+            return [];
+        }
+
+        return parsedValue
+            .map(parseStoredMovement)
+            .filter(
+                (movement): movement is StockMovement =>
+                    movement !== null,
+            )
+            .sort(
+                (first, second) =>
+                    Date.parse(second.createdAt) -
+                    Date.parse(first.createdAt),
+            );
+    } catch {
+        return [];
+    }
+}
+
+function normalizeQuantity(quantity: number) {
+    return Number(quantity.toFixed(6));
+}
+
 export function ProductsProvider({
     children,
 }: ProductsProviderProps) {
     const [products, setProducts] =
         useState<Product[]>(getStoredProducts);
+    const [stockMovements, setStockMovements] =
+        useState<StockMovement[]>(getStoredMovements);
 
     useEffect(() => {
         try {
@@ -124,6 +214,17 @@ export function ProductsProvider({
             // Keep in-memory state usable if storage is unavailable or full.
         }
     }, [products]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(
+                MOVEMENTS_STORAGE_KEY,
+                JSON.stringify(stockMovements),
+            );
+        } catch {
+            // Keep in-memory history usable if storage is unavailable or full.
+        }
+    }, [stockMovements]);
 
     function addProduct(product: Product) {
         setProducts((currentProducts) => [
@@ -150,6 +251,90 @@ export function ProductsProvider({
         );
     }
 
+    function addStockMovement(
+        input: StockMovementInput,
+    ): AddStockMovementResult {
+        const product = products.find(
+            (currentProduct) => currentProduct.id === input.productId,
+        );
+
+        if (!product) {
+            return {
+                success: false,
+                error: "يرجى اختيار منتج صالح.",
+            };
+        }
+
+        if (
+            !Number.isFinite(input.quantity) ||
+            input.quantity < 0 ||
+            (input.type !== "adjustment" && input.quantity === 0)
+        ) {
+            return {
+                success: false,
+                error:
+                    input.type === "adjustment"
+                        ? "يجب أن تكون الكمية الجديدة صفرًا أو رقمًا موجبًا."
+                        : "يجب أن تكون الكمية رقمًا موجبًا.",
+            };
+        }
+
+        if (
+            product.unit === "قطعة" &&
+            !Number.isInteger(input.quantity)
+        ) {
+            return {
+                success: false,
+                error: "كميات المنتجات المقاسة بالقطعة يجب أن تكون أعدادًا صحيحة.",
+            };
+        }
+
+        if (
+            input.type === "out" &&
+            input.quantity > product.quantity
+        ) {
+            return {
+                success: false,
+                error: "كمية الإخراج أكبر من الكمية المتوفرة.",
+            };
+        }
+
+        const previousQuantity = product.quantity;
+        const newQuantity = normalizeQuantity(
+            input.type === "in"
+                ? previousQuantity + input.quantity
+                : input.type === "out"
+                  ? previousQuantity - input.quantity
+                  : input.quantity,
+        );
+        const createdAt = new Date().toISOString();
+        const newestMovementId = stockMovements[0]?.id ?? 0;
+        const movement: StockMovement = {
+            id: Math.max(Date.now(), newestMovementId + 1),
+            productId: product.id,
+            type: input.type,
+            quantity: input.quantity,
+            previousQuantity,
+            newQuantity,
+            note: input.note.trim(),
+            createdAt,
+        };
+
+        setProducts((currentProducts) =>
+            currentProducts.map((currentProduct) =>
+                currentProduct.id === product.id
+                    ? { ...currentProduct, quantity: newQuantity }
+                    : currentProduct,
+            ),
+        );
+        setStockMovements((currentMovements) => [
+            movement,
+            ...currentMovements,
+        ]);
+
+        return { success: true };
+    }
+
     return (
         <ProductsContext.Provider
             value={{
@@ -157,6 +342,8 @@ export function ProductsProvider({
                 addProduct,
                 updateProduct,
                 deleteProduct,
+                stockMovements,
+                addStockMovement,
             }}
         >
             {children}
