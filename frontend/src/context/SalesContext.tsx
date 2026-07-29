@@ -36,6 +36,10 @@ type SalesContextValue = {
         invoice: SaleInvoice,
         items?: SaleInvoiceItem[],
     ) => SalesActionResult;
+    saveDraftInvoice: (
+        invoice: SaleInvoice,
+        items: SaleInvoiceItem[],
+    ) => SalesActionResult;
     deleteDraftInvoice: (invoiceId: number) => SalesActionResult;
     getInvoiceById: (invoiceId: number) => SaleInvoice | undefined;
     getItemsByInvoiceId: (invoiceId: number) => SaleInvoiceItem[];
@@ -61,6 +65,10 @@ function isPositiveFiniteNumber(value: unknown): value is number {
         Number.isFinite(value) &&
         value > 0
     );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value);
 }
 
 function isStatus(value: unknown): value is SaleInvoiceStatus {
@@ -97,7 +105,7 @@ function parseInvoice(value: unknown): SaleInvoice | null {
         !isNonNegativeFiniteNumber(value.discount) ||
         !isNonNegativeFiniteNumber(value.total) ||
         !isNonNegativeFiniteNumber(value.paidAmount) ||
-        !isNonNegativeFiniteNumber(value.remainingAmount) ||
+        !isFiniteNumber(value.remainingAmount) ||
         typeof value.note !== "string" ||
         !isDate(value.createdAt) ||
         !isDate(value.updatedAt)
@@ -319,6 +327,77 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         return { success: true };
     }
 
+    function saveDraftInvoice(
+        invoice: SaleInvoice,
+        items: SaleInvoiceItem[],
+    ): SalesActionResult {
+        const existingInvoice = invoices.find(
+            (currentInvoice) =>
+                currentInvoice.id === invoice.id,
+        );
+
+        if (
+            existingInvoice &&
+            existingInvoice.status !== "draft"
+        ) {
+            return {
+                success: false,
+                error: "لا يمكن تعديل فاتورة غير مسودة.",
+            };
+        }
+
+        if (invoice.status !== "draft") {
+            return {
+                success: false,
+                error: "يجب حفظ الفاتورة كمسودة.",
+            };
+        }
+
+        if (
+            invoices.some(
+                (currentInvoice) =>
+                    currentInvoice.id !== invoice.id &&
+                    currentInvoice.invoiceNumber ===
+                        invoice.invoiceNumber,
+            )
+        ) {
+            return {
+                success: false,
+                error: "رقم الفاتورة مستخدم بالفعل.",
+            };
+        }
+
+        if (items.length === 0) {
+            return {
+                success: false,
+                error: "يجب إضافة منتج واحد على الأقل.",
+            };
+        }
+
+        const consistentItems = items.map((item) => ({
+            ...item,
+            invoiceId: invoice.id,
+        }));
+
+        setInvoices((currentInvoices) =>
+            existingInvoice
+                ? currentInvoices.map((currentInvoice) =>
+                      currentInvoice.id === invoice.id
+                          ? invoice
+                          : currentInvoice,
+                  )
+                : [invoice, ...currentInvoices],
+        );
+        setInvoiceItems((currentItems) => [
+            ...currentItems.filter(
+                (item) => item.invoiceId !== invoice.id,
+            ),
+            ...consistentItems,
+        ]);
+
+        return { success: true };
+    }
+
     function getInvoiceById(invoiceId: number) {
         return invoices.find((invoice) => invoice.id === invoiceId);
     }
@@ -336,6 +415,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
                 invoiceItems,
                 addInvoice,
                 updateInvoice,
+                saveDraftInvoice,
                 deleteDraftInvoice,
                 getInvoiceById,
                 getItemsByInvoiceId,

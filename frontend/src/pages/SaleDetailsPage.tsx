@@ -1,7 +1,12 @@
 import { ArrowRight } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import {
+    useNavigate,
+    useParams,
+    useSearchParams,
+} from "react-router-dom";
 
 import { useSales } from "../context/SalesContext";
+import { SaleInvoiceEditor } from "./NewSalePage";
 import type { Currency } from "../types/customer";
 import type { SaleInvoiceStatus } from "../types/sale";
 
@@ -25,11 +30,24 @@ function formatMoney(amount: number, currency: Currency) {
 function SaleDetailsPage() {
     const navigate = useNavigate();
     const { invoiceId } = useParams();
+    const [searchParams] = useSearchParams();
     const { getInvoiceById } = useSales();
     const numericInvoiceId = Number(invoiceId);
     const invoice = Number.isFinite(numericInvoiceId)
         ? getInvoiceById(numericInvoiceId)
         : undefined;
+
+    if (searchParams.get("edit") === "1") {
+        return (
+            <SaleInvoiceEditor
+                invoiceId={
+                    Number.isFinite(numericInvoiceId)
+                        ? numericInvoiceId
+                        : Number.NaN
+                }
+            />
+        );
+    }
 
     return (
         <section className="mx-auto max-w-4xl">
