@@ -11,6 +11,7 @@ import {
     initialSaleInvoiceItems,
     initialSaleInvoices,
 } from "../data/initialSales";
+import { buildSaleCancellationPlan } from "../services/saleCancellation";
 import { buildSaleCompletionPlan } from "../services/saleCompletion";
 import type {
     SaleInvoice,
@@ -46,6 +47,10 @@ type SalesContextValue = {
     ) => SalesActionResult;
     deleteDraftInvoice: (invoiceId: number) => SalesActionResult;
     completeDraftInvoice: (invoiceId: number) => SalesActionResult;
+    cancelCompletedInvoice: (
+        invoiceId: number,
+        reason: string,
+    ) => SalesActionResult;
     getInvoiceById: (invoiceId: number) => SaleInvoice | undefined;
     getItemsByInvoiceId: (invoiceId: number) => SaleInvoiceItem[];
 };
@@ -147,6 +152,27 @@ function parseInvoice(value: unknown): SaleInvoice | null {
                       isNonNegativeFiniteNumber(id),
               )
             : [],
+        cancelledAt: isDate(value.cancelledAt)
+            ? value.cancelledAt
+            : null,
+        cancellationReason:
+            typeof value.cancellationReason === "string"
+                ? value.cancellationReason
+                : "",
+        reversalStockMovementIds: Array.isArray(
+            value.reversalStockMovementIds,
+        )
+            ? value.reversalStockMovementIds.filter(
+                  (id): id is number =>
+                      isNonNegativeFiniteNumber(id),
+              )
+            : [],
+        reversedCustomerTransactionId:
+            isNonNegativeFiniteNumber(
+                value.reversedCustomerTransactionId,
+            )
+                ? value.reversedCustomerTransactionId
+                : null,
     };
 }
 
@@ -214,6 +240,7 @@ function loadStoredArray<T>(
 
 export function SalesProvider({ children }: { children: ReactNode }) {
     const completionLocks = useRef(new Set<number>());
+    const cancellationLocks = useRef(new Set<number>());
     const {
         products,
         stockMovements,
@@ -223,6 +250,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         customers,
         transactions,
         applySaleTransaction,
+        applySaleTransactionVoid,
     } = useCustomers();
     const [invoices, setInvoices] = useState<SaleInvoice[]>(() =>
         loadStoredArray(
@@ -497,6 +525,67 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         );
     }
 
+    function cancelCompletedInvoice(
+        invoiceId: number,
+        reason: string,
+    ): SalesActionResult {
+        if (cancellationLocks.current.has(invoiceId)) {
+            return {
+                success: false,
+                error: "جاري إلغاء الفاتورة أو تم إلغاؤها بالفعل.",
+            };
+        }
+
+        cancellationLocks.current.add(invoiceId);
+        const invoice = invoices.find(
+            (currentInvoice) =>
+                currentInvoice.id === invoiceId,
+        );
+        const items = invoiceItems.filter(
+            (item) => item.invoiceId === invoiceId,
+        );
+        const cancellation = buildSaleCancellationPlan({
+            invoice,
+            items,
+            products,
+            stockMovements,
+            customerTransactions: transactions,
+            reason,
+            cancelledAt: new Date().toISOString(),
+        });
+
+        if (!cancellation.success) {
+            cancellationLocks.current.delete(invoiceId);
+            return {
+                success: false,
+                error: cancellation.error,
+            };
+        }
+
+        const { plan } = cancellation;
+
+        applySaleStockPlan(
+            plan.updatedProducts,
+            plan.reversalStockMovements,
+        );
+
+        if (plan.voidedCustomerTransaction) {
+            applySaleTransactionVoid(
+                plan.voidedCustomerTransaction,
+            );
+        }
+
+        setInvoices((currentInvoices) =>
+            currentInvoices.map((currentInvoice) =>
+                currentInvoice.id === invoiceId
+                    ? plan.cancelledInvoice
+                    : currentInvoice,
+            ),
+        );
+
+        return { success: true };
+    }
+
     return (
         <SalesContext.Provider
             value={{
@@ -507,6 +596,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
                 saveDraftInvoice,
                 deleteDraftInvoice,
                 completeDraftInvoice,
+                cancelCompletedInvoice,
                 getInvoiceById,
                 getItemsByInvoiceId,
             }}

@@ -108,3 +108,29 @@ export function getPaymentExplanation(
 
     return "الفاتورة مدفوعة بالكامل ولم تُسجل حركة دين.";
 }
+
+export function getSalesSummary(
+    invoices: readonly SaleInvoice[],
+    currency: Currency,
+) {
+    const currencyInvoices = invoices.filter(
+        (invoice) => invoice.currency === currency,
+    );
+    const completedInvoices = currencyInvoices.filter(
+        (invoice) => invoice.status === "completed",
+    );
+
+    return {
+        invoiceCount: currencyInvoices.length,
+        completedCount: completedInvoices.length,
+        completedSales: completedInvoices.reduce(
+            (total, invoice) => total + invoice.total,
+            0,
+        ),
+        completedRemaining: completedInvoices.reduce(
+            (total, invoice) =>
+                total + invoice.remainingAmount,
+            0,
+        ),
+    };
+}

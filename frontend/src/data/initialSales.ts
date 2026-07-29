@@ -22,6 +22,10 @@ export const initialSaleInvoices: SaleInvoice[] = [
         completedAt: "2026-07-20T10:15:00.000Z",
         completionTransactionId: null,
         stockMovementIds: [],
+        cancelledAt: null,
+        cancellationReason: "",
+        reversalStockMovementIds: [],
+        reversedCustomerTransactionId: null,
     },
     {
         id: 1002,
@@ -41,6 +45,10 @@ export const initialSaleInvoices: SaleInvoice[] = [
         completedAt: null,
         completionTransactionId: null,
         stockMovementIds: [],
+        cancelledAt: null,
+        cancellationReason: "",
+        reversalStockMovementIds: [],
+        reversedCustomerTransactionId: null,
     },
     {
         id: 1003,
@@ -60,6 +68,10 @@ export const initialSaleInvoices: SaleInvoice[] = [
         completedAt: "2026-07-26T09:10:00.000Z",
         completionTransactionId: null,
         stockMovementIds: [],
+        cancelledAt: null,
+        cancellationReason: "",
+        reversalStockMovementIds: [],
+        reversedCustomerTransactionId: null,
     },
 ];
 

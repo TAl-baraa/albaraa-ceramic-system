@@ -6,8 +6,9 @@ import {
     X,
 } from "lucide-react";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useProducts } from "../context/ProductsContext";
 import type {
@@ -16,6 +17,7 @@ import type {
 } from "../types/product";
 
 function ProductsPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const {
         products,
         addProduct,
@@ -70,6 +72,16 @@ function ProductsPage() {
         resetProductForm();
         setIsProductDialogOpen(true);
     }
+
+    useEffect(() => {
+        if (searchParams.get("action") !== "add") {
+            return;
+        }
+        openAddProductDialog();
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("action");
+        setSearchParams(nextParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     function openEditProductDialog(product: Product) {
         setProductToEdit(product);

@@ -587,6 +587,10 @@ export function SaleInvoiceEditor({
             completedAt: null,
             completionTransactionId: null,
             stockMovementIds: [],
+            cancelledAt: null,
+            cancellationReason: "",
+            reversalStockMovementIds: [],
+            reversedCustomerTransactionId: null,
         };
         const savedItems: SaleInvoiceItem[] = items.map((item) => {
             const quantity = Number(item.quantityInput);

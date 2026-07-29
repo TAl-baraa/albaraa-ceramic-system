@@ -24,6 +24,10 @@ export type SaleInvoice = {
     completedAt: string | null;
     completionTransactionId: number | null;
     stockMovementIds: number[];
+    cancelledAt: string | null;
+    cancellationReason: string;
+    reversalStockMovementIds: number[];
+    reversedCustomerTransactionId: number | null;
 };
 
 export type SaleInvoiceItem = {

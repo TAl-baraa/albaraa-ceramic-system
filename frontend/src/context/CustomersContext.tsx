@@ -46,6 +46,9 @@ type CustomersContextValue = {
     applySaleTransaction: (
         transaction: CustomerTransaction,
     ) => void;
+    applySaleTransactionVoid: (
+        transaction: CustomerTransaction,
+    ) => void;
     getCustomerBalance: (customerId: number) => CustomerBalance;
 };
 
@@ -535,6 +538,25 @@ export function CustomersProvider({
         );
     }
 
+    function applySaleTransactionVoid(
+        transaction: CustomerTransaction,
+    ) {
+        setTransactions((currentTransactions) =>
+            recalculateAllTransactionBalances(
+                currentTransactions.map((currentTransaction) =>
+                    currentTransaction.id === transaction.id
+                        ? transaction
+                        : currentTransaction,
+                ),
+            ).toSorted(
+                (first, second) =>
+                    Date.parse(second.createdAt) -
+                        Date.parse(first.createdAt) ||
+                    second.id - first.id,
+            ),
+        );
+    }
+
     return (
         <CustomersContext.Provider
             value={{
@@ -547,6 +569,7 @@ export function CustomersProvider({
                 correctTransaction,
                 voidTransaction,
                 applySaleTransaction,
+                applySaleTransactionVoid,
                 getCustomerBalance,
             }}
         >

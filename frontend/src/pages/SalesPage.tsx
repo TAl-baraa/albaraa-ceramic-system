@@ -19,6 +19,7 @@ import type {
     SaleInvoice,
     SaleInvoiceStatus,
 } from "../types/sale";
+import { getSalesSummary } from "../utils/salePresentation";
 
 const statusLabels: Record<SaleInvoiceStatus, string> = {
     draft: "مسودة",
@@ -62,16 +63,9 @@ function SalesPage() {
     const currencyInvoices = invoices.filter(
         (invoice) => invoice.currency === selectedCurrency,
     );
-    const completedInvoices = currencyInvoices.filter(
-        (invoice) => invoice.status === "completed",
-    );
-    const totalCompletedSales = completedInvoices.reduce(
-        (total, invoice) => total + invoice.total,
-        0,
-    );
-    const totalRemaining = completedInvoices.reduce(
-        (total, invoice) => total + invoice.remainingAmount,
-        0,
+    const summary = getSalesSummary(
+        invoices,
+        selectedCurrency,
     );
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const filteredInvoices = currencyInvoices
@@ -139,7 +133,7 @@ function SalesPage() {
             <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                     label="إجمالي الفواتير"
-                    value={currencyInvoices.length.toLocaleString(
+                    value={summary.invoiceCount.toLocaleString(
                         "ar-IQ",
                     )}
                     icon={<FileText size={22} />}
@@ -147,7 +141,7 @@ function SalesPage() {
                 />
                 <SummaryCard
                     label="الفواتير المكتملة"
-                    value={completedInvoices.length.toLocaleString(
+                    value={summary.completedCount.toLocaleString(
                         "ar-IQ",
                     )}
                     icon={<CircleCheckBig size={22} />}
@@ -156,7 +150,7 @@ function SalesPage() {
                 <SummaryCard
                     label="إجمالي المبيعات المكتملة"
                     value={formatMoney(
-                        totalCompletedSales,
+                        summary.completedSales,
                         selectedCurrency,
                     )}
                     icon={<WalletCards size={22} />}
@@ -165,7 +159,7 @@ function SalesPage() {
                 <SummaryCard
                     label="إجمالي المبالغ المتبقية"
                     value={formatMoney(
-                        totalRemaining,
+                        summary.completedRemaining,
                         selectedCurrency,
                     )}
                     icon={<WalletCards size={22} />}

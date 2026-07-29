@@ -1,6 +1,7 @@
 import {
     ArrowRight,
     Check,
+    CircleX,
     Pencil,
     Printer,
 } from "lucide-react";
@@ -14,7 +15,10 @@ import {
 import { useSales } from "../context/SalesContext";
 import PrintableSaleInvoice from "../components/sales/PrintableSaleInvoice";
 import { useCustomers } from "../context/CustomersContext";
-import type { SaleInvoiceStatus } from "../types/sale";
+import type {
+    SaleInvoice,
+    SaleInvoiceStatus,
+} from "../types/sale";
 import {
     formatSaleMoney,
     getPaymentExplanation,
@@ -45,11 +49,15 @@ function SaleDetailsPage() {
         getInvoiceById,
         getItemsByInvoiceId,
         completeDraftInvoice,
+        cancelCompletedInvoice,
     } = useSales();
     const { customers } = useCustomers();
     const [showFinalizeConfirmation, setShowFinalizeConfirmation] =
         useState(false);
     const [completionError, setCompletionError] = useState("");
+    const [cancellationError, setCancellationError] = useState("");
+    const [showCancellationConfirmation, setShowCancellationConfirmation] =
+        useState(false);
     const [printError, setPrintError] = useState("");
     const numericInvoiceId = Number(invoiceId);
     const invoice = Number.isFinite(numericInvoiceId)
@@ -113,6 +121,26 @@ function SaleDetailsPage() {
         window.print();
     }
 
+    function cancelInvoice(reason: string) {
+        if (!invoice) {
+            return;
+        }
+
+        const result = cancelCompletedInvoice(invoice.id, reason);
+
+        if (!result.success) {
+            setCancellationError(result.error);
+            setShowCancellationConfirmation(false);
+            return;
+        }
+
+        setCancellationError("");
+        setShowCancellationConfirmation(false);
+        navigate(`/sales/${invoice.id}?cancelled=1`, {
+            replace: true,
+        });
+    }
+
     return (
         <section className="mx-auto max-w-6xl">
             <button
@@ -142,6 +170,13 @@ function SaleDetailsPage() {
                             بنجاح.
                         </div>
                     )}
+                    {searchParams.get("cancelled") === "1" && (
+                        <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                            <CircleX size={18} />
+                            تم إلغاء الفاتورة وعكس آثارها على المخزون
+                            وحساب العميل.
+                        </div>
+                    )}
                     {completionError && (
                         <div className="whitespace-pre-line rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {completionError}
@@ -150,6 +185,11 @@ function SaleDetailsPage() {
                     {printError && (
                         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {printError}
+                        </div>
+                    )}
+                    {cancellationError && (
+                        <div className="whitespace-pre-line rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                            {cancellationError}
                         </div>
                     )}
 
@@ -206,6 +246,20 @@ function SaleDetailsPage() {
                                     >
                                         <Printer size={17} />
                                         طباعة الفاتورة
+                                    </button>
+                                )}
+                                {invoice.status === "completed" && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setShowCancellationConfirmation(
+                                                true,
+                                            )
+                                        }
+                                        className="invoice-screen-action inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                                    >
+                                        <CircleX size={17} />
+                                        إلغاء الفاتورة
                                     </button>
                                 )}
                             </div>
@@ -283,6 +337,47 @@ function SaleDetailsPage() {
                                     />
                                 </div>
                             </>
+                        )}
+                        {invoice.status === "cancelled" && (
+                            <div className="mt-5 space-y-4">
+                                <p className="rounded-xl bg-red-50 px-4 py-4 text-sm font-semibold text-red-700">
+                                    تم إلغاء هذه الفاتورة وعكس آثارها على
+                                    المخزون وحساب العميل.
+                                </p>
+                                <div className="grid gap-3 rounded-xl border border-red-100 bg-red-50/40 p-4 sm:grid-cols-2">
+                                    <DetailCard
+                                        label="تاريخ الإلغاء"
+                                        value={
+                                            invoice.cancelledAt
+                                                ? new Date(
+                                                      invoice.cancelledAt,
+                                                  ).toLocaleString("ar-IQ")
+                                                : "—"
+                                        }
+                                    />
+                                    <DetailCard
+                                        label="سبب الإلغاء"
+                                        value={
+                                            invoice.cancellationReason ||
+                                            "—"
+                                        }
+                                    />
+                                    <DetailCard
+                                        label="تاريخ الاعتماد الأصلي"
+                                        value={
+                                            invoice.completedAt
+                                                ? new Date(
+                                                      invoice.completedAt,
+                                                  ).toLocaleString("ar-IQ")
+                                                : "—"
+                                        }
+                                    />
+                                    <DetailCard
+                                        label="حركات عكس المخزون"
+                                        value={`تم إنشاء ${invoice.reversalStockMovementIds.length.toLocaleString("ar-IQ")} حركات عكس`}
+                                    />
+                                </div>
+                            </div>
                         )}
                     </div>
 
@@ -448,7 +543,128 @@ function SaleDetailsPage() {
                         onConfirm={finalizeInvoice}
                     />
                 )}
+            {invoice &&
+                showCancellationConfirmation &&
+                invoice.status === "completed" && (
+                    <CancelInvoiceDialog
+                        invoice={invoice}
+                        itemCount={items.length}
+                        onClose={() =>
+                            setShowCancellationConfirmation(false)
+                        }
+                        onConfirm={cancelInvoice}
+                    />
+                )}
         </section>
+    );
+}
+
+function CancelInvoiceDialog({
+    invoice,
+    itemCount,
+    onClose,
+    onConfirm,
+}: {
+    invoice: SaleInvoice;
+    itemCount: number;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+
+    function submit() {
+        if (!reason.trim()) {
+            setError("سبب إلغاء الفاتورة مطلوب.");
+            return;
+        }
+        onConfirm(reason.trim());
+    }
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-invoice-title"
+        >
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <h3
+                    id="cancel-invoice-title"
+                    className="text-xl font-bold text-red-700"
+                >
+                    إلغاء الفاتورة
+                </h3>
+                <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-4 text-sm">
+                    <p>
+                        رقم الفاتورة:{" "}
+                        <strong dir="ltr">{invoice.invoiceNumber}</strong>
+                    </p>
+                    <p>
+                        العميل:{" "}
+                        <strong>
+                            {invoice.customerNameSnapshot || "بيع نقدي"}
+                        </strong>
+                    </p>
+                    <p>
+                        الإجمالي:{" "}
+                        <strong>
+                            {formatSaleMoney(
+                                invoice.total,
+                                invoice.currency,
+                            )}
+                        </strong>
+                    </p>
+                    <p>
+                        عدد المنتجات:{" "}
+                        <strong>
+                            {itemCount.toLocaleString("ar-IQ")}
+                        </strong>
+                    </p>
+                </div>
+                <div className="mt-4 space-y-2 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                    <p>ستُعاد كميات المنتجات إلى المخزون.</p>
+                    <p>
+                        سيُعكس أثر الحركة المالية المرتبطة على حساب
+                        العميل إن وجدت.
+                    </p>
+                </div>
+                <label className="mt-4 block text-sm font-semibold">
+                    سبب إلغاء الفاتورة
+                    <textarea
+                        value={reason}
+                        onChange={(event) => {
+                            setReason(event.target.value);
+                            setError("");
+                        }}
+                        rows={3}
+                        className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-red-400"
+                        placeholder="اكتب سبب الإلغاء"
+                    />
+                </label>
+                {error && (
+                    <p className="mt-2 text-sm font-semibold text-red-600">
+                        {error}
+                    </p>
+                )}
+                <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-50"
+                    >
+                        تراجع
+                    </button>
+                    <button
+                        type="button"
+                        onClick={submit}
+                        className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                    >
+                        تأكيد إلغاء الفاتورة
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

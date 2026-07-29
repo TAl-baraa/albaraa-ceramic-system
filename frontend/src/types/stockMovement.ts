@@ -1,5 +1,8 @@
 export type StockMovementType = "in" | "out" | "adjustment";
-export type StockMovementSourceType = "manual" | "sale_invoice";
+export type StockMovementSourceType =
+    | "manual"
+    | "sale_invoice"
+    | "sale_invoice_cancellation";
 
 export type StockMovement = {
     id: number;

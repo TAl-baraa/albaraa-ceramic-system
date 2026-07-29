@@ -40,6 +40,11 @@ export default function PrintableSaleInvoice({
                         معرض البراء للسيراميك
                     </h1>
                     <p className="print-invoice-kind">فاتورة بيع</p>
+                    {invoice.status === "cancelled" && (
+                        <p className="print-cancelled-banner">
+                            فاتورة ملغاة
+                        </p>
+                    )}
                 </div>
                 <div className="print-invoice-number">
                     <span>رقم الفاتورة</span>
@@ -77,6 +82,26 @@ export default function PrintableSaleInvoice({
                     value={invoice.currency}
                 />
             </section>
+
+            {invoice.status === "cancelled" && (
+                <section className="print-cancellation-details">
+                    <strong>فاتورة ملغاة</strong>
+                    <span>
+                        تاريخ الإلغاء:{" "}
+                        {invoice.cancelledAt
+                            ? new Date(
+                                  invoice.cancelledAt,
+                              ).toLocaleDateString("ar-IQ", {
+                                  dateStyle: "long",
+                              })
+                            : "—"}
+                    </span>
+                    <span>
+                        سبب الإلغاء:{" "}
+                        {invoice.cancellationReason || "—"}
+                    </span>
+                </section>
+            )}
 
             <table className="print-items-table">
                 <thead>

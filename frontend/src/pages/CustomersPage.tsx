@@ -1,7 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
     AlertTriangle,
     Eye,
@@ -126,6 +126,7 @@ function formatSummaryAmount(amount: number, currency: Currency) {
 }
 
 function CustomersPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const {
         customers,
         transactions,
@@ -224,6 +225,16 @@ function CustomersPage() {
         resetCustomerForm();
         setIsCustomerDialogOpen(true);
     }
+
+    useEffect(() => {
+        if (searchParams.get("action") !== "add") {
+            return;
+        }
+        openAddCustomerDialog();
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("action");
+        setSearchParams(nextParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     function openEditCustomerDialog(customer: Customer) {
         setCustomerToEdit(customer);

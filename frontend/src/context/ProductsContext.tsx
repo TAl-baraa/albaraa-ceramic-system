@@ -98,8 +98,9 @@ function parseStoredMovement(value: unknown): StockMovement | null {
         note: value.note,
         createdAt: value.createdAt,
         sourceType:
-            value.sourceType === "sale_invoice"
-                ? "sale_invoice"
+            value.sourceType === "sale_invoice" ||
+            value.sourceType === "sale_invoice_cancellation"
+                ? value.sourceType
                 : "manual",
         sourceId: isFiniteNonNegativeNumber(value.sourceId)
             ? value.sourceId

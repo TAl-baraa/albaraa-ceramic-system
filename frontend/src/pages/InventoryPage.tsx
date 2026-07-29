@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
     AlertTriangle,
     ArrowDownUp,
@@ -47,6 +47,7 @@ function getStockStatus(product: Product) {
 }
 
 function InventoryPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const {
         products,
         stockMovements,
@@ -83,6 +84,16 @@ function InventoryPage() {
         resetMovementForm();
         setIsMovementDialogOpen(true);
     }
+
+    useEffect(() => {
+        if (searchParams.get("action") !== "movement") {
+            return;
+        }
+        openMovementDialog();
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("action");
+        setSearchParams(nextParams, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     function closeMovementDialog() {
         setIsMovementDialogOpen(false);
@@ -731,13 +742,18 @@ function MovementHistoryRow({
             </td>
             <td className="max-w-xs px-5 py-4 text-slate-600">
                 {movement.note || "—"}
-                {movement.sourceType === "sale_invoice" &&
+                {(movement.sourceType === "sale_invoice" ||
+                    movement.sourceType ===
+                        "sale_invoice_cancellation") &&
                     movement.sourceId !== null && (
                         <Link
                             to={`/sales/${movement.sourceId}`}
                             className="mt-1 block text-xs font-semibold text-blue-700 hover:underline"
                         >
-                            فاتورة بيع {movement.sourceReference}
+                            {movement.sourceType === "sale_invoice"
+                                ? "فاتورة بيع"
+                                : "عكس مخزون بسبب إلغاء الفاتورة"}{" "}
+                            {movement.sourceReference}
                         </Link>
                     )}
             </td>
