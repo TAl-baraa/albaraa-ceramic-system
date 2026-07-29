@@ -9,6 +9,7 @@ import type {
 import {
     calculateCustomerNetBalance,
     filterTransactionsByCurrency,
+    getLatestActivePaymentDate,
     recalculateCustomerTransactionHistory,
 } from "../src/utils/customerBalance.ts";
 import { parseStoredCustomerTransaction } from "../src/utils/customerStorage.ts";
@@ -20,7 +21,12 @@ function transaction(
     type: CustomerTransactionType,
     amount: number,
     currency: Currency = "IQD",
+    overrides: Partial<CustomerTransaction> = {},
 ): CustomerTransaction {
+    const createdAt = new Date(
+        Date.UTC(2026, 0, id),
+    ).toISOString();
+
     return {
         id,
         customerId: CUSTOMER_ID,
@@ -28,8 +34,15 @@ function transaction(
         amount,
         currency,
         note: "",
-        createdAt: new Date(Date.UTC(2026, 0, id)).toISOString(),
+        createdAt,
+        recordedAt: createdAt,
         balanceAfter: { IQD: 999_999, USD: 999_999 },
+        status: "active",
+        correctedTransactionId: null,
+        voidedAt: null,
+        voidReason: "",
+        createdByCorrection: false,
+        ...overrides,
     };
 }
 
@@ -167,6 +180,119 @@ test("currency filtering is non-mutating and returns only that currency", () => 
     assert.deepEqual(transactions, snapshot);
 });
 
+test("voided debt remains in history but does not affect balance", () => {
+    const voidedDebt = transaction(1, "debt", 25_000, "IQD", {
+        status: "voided",
+        voidedAt: "2026-01-04T00:00:00.000Z",
+        voidReason: "إلغاء الدين",
+    });
+    const history = recalculateCustomerTransactionHistory(
+        [voidedDebt],
+        CUSTOMER_ID,
+    );
+
+    assert.equal(history.length, 1);
+    assert.equal(history[0]?.status, "voided");
+    assert.deepEqual(history[0]?.balanceAfter, {
+        IQD: 0,
+        USD: 0,
+    });
+    assert.deepEqual(
+        calculateCustomerNetBalance([voidedDebt], CUSTOMER_ID),
+        { IQD: 0, USD: 0 },
+    );
+});
+
+test("corrected debt replaces the original effect", () => {
+    const originalDebt = transaction(1, "debt", 25_000, "IQD", {
+        status: "voided",
+        voidedAt: "2026-01-03T00:00:00.000Z",
+        voidReason: "تصحيح المبلغ",
+    });
+    const replacementDebt = transaction(3, "debt", 20_000, "IQD", {
+        createdAt: originalDebt.createdAt,
+        correctedTransactionId: originalDebt.id,
+        createdByCorrection: true,
+    });
+    const payment = transaction(
+        2,
+        "payment_received",
+        10_000,
+    );
+
+    assert.deepEqual(
+        calculateCustomerNetBalance(
+            [originalDebt, payment, replacementDebt],
+            CUSTOMER_ID,
+        ),
+        { IQD: 10_000, USD: 0 },
+    );
+});
+
+test("cancelled payment no longer reduces the balance", () => {
+    const debt = transaction(1, "debt", 25_000);
+    const cancelledPayment = transaction(
+        2,
+        "payment_received",
+        10_000,
+        "IQD",
+        {
+            status: "voided",
+            voidedAt: "2026-01-03T00:00:00.000Z",
+            voidReason: "دفعة مسجلة بالخطأ",
+        },
+    );
+
+    assert.equal(
+        calculateCustomerNetBalance(
+            [debt, cancelledPayment],
+            CUSTOMER_ID,
+        ).IQD,
+        25_000,
+    );
+});
+
+test("last payment date ignores voided payments", () => {
+    const activePayment = transaction(
+        1,
+        "payment_received",
+        5_000,
+    );
+    const voidedNewerPayment = transaction(
+        2,
+        "payment_paid",
+        2_000,
+        "IQD",
+        { status: "voided" },
+    );
+
+    assert.equal(
+        getLatestActivePaymentDate(
+            [activePayment, voidedNewerPayment],
+            CUSTOMER_ID,
+        ),
+        activePayment.createdAt,
+    );
+});
+
+test("voided transactions do not disturb independent IQD and USD totals", () => {
+    const transactions = [
+        transaction(1, "debt", 25_000, "IQD"),
+        transaction(2, "credit", 100, "USD"),
+        transaction(3, "debt", 8_000, "IQD", {
+            status: "voided",
+        }),
+        transaction(4, "payment_received", 25, "USD", {
+            status: "voided",
+        }),
+    ];
+
+    assert.deepEqual(
+        calculateCustomerNetBalance(transactions, CUSTOMER_ID),
+        { IQD: 25_000, USD: -100 },
+    );
+});
+
 test("uses context storage migration and runtime-shaped objects", () => {
     const storedTransactions = [
         {
@@ -213,5 +339,15 @@ test("uses context storage migration and runtime-shaped objects", () => {
             CUSTOMER_ID,
         ),
         { IQD: 10_000, USD: 0 },
+    );
+    assert.ok(
+        transactions.every(
+            (storedTransaction) =>
+                storedTransaction?.status === "active" &&
+                storedTransaction.correctedTransactionId === null &&
+                storedTransaction.voidedAt === null &&
+                storedTransaction.voidReason === "" &&
+                storedTransaction.createdByCorrection === false,
+        ),
     );
 });

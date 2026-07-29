@@ -7,6 +7,13 @@ export type CustomerTransactionType =
     | "payment_paid"
     | "adjustment";
 
+export type EditableCustomerTransactionType = Exclude<
+    CustomerTransactionType,
+    "adjustment"
+>;
+
+export type CustomerTransactionStatus = "active" | "voided";
+
 export type Customer = {
     id: number;
     name: string;
@@ -25,7 +32,13 @@ export type CustomerTransaction = {
     currency: Currency;
     note: string;
     createdAt: string;
+    recordedAt: string;
     balanceAfter: CustomerBalance;
+    status: CustomerTransactionStatus;
+    correctedTransactionId: number | null;
+    voidedAt: string | null;
+    voidReason: string;
+    createdByCorrection: boolean;
 };
 
 export type CustomerBalance = Record<Currency, number>;
@@ -39,6 +52,14 @@ export type CustomerTransactionInput = Pick<
     CustomerTransaction,
     "customerId" | "type" | "amount" | "currency" | "note"
 >;
+
+export type CustomerTransactionCorrectionInput = {
+    transactionId: number;
+    type: EditableCustomerTransactionType;
+    amount: number;
+    note: string;
+    reason: string;
+};
 
 export type CustomerActionResult =
     | { success: true }

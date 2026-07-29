@@ -40,6 +40,10 @@ function applyTransaction(
     };
 }
 
+function isActive(transaction: CustomerTransaction) {
+    return transaction.status === "active";
+}
+
 function sortOldestFirst(
     transactions: readonly CustomerTransaction[],
 ): CustomerTransaction[] {
@@ -62,7 +66,9 @@ export function recalculateCustomerTransactionHistory(
             (transaction) => transaction.customerId === customerId,
         ),
     ).map((transaction) => {
-        balance = applyTransaction(balance, transaction);
+        if (isActive(transaction)) {
+            balance = applyTransaction(balance, transaction);
+        }
 
         return {
             ...transaction,
@@ -80,10 +86,9 @@ export function recalculateAllTransactionBalances(
         const previousBalance =
             balancesByCustomer.get(transaction.customerId) ??
             EMPTY_CUSTOMER_BALANCE;
-        const balanceAfter = applyTransaction(
-            previousBalance,
-            transaction,
-        );
+        const balanceAfter = isActive(transaction)
+            ? applyTransaction(previousBalance, transaction)
+            : previousBalance;
 
         balancesByCustomer.set(transaction.customerId, balanceAfter);
 
@@ -101,9 +106,39 @@ export function calculateCustomerNetBalance(
     return sortOldestFirst(transactions).reduce<CustomerBalance>(
         (balance, transaction) =>
             transaction.customerId === customerId
+                && isActive(transaction)
                 ? applyTransaction(balance, transaction)
                 : balance,
         { ...EMPTY_CUSTOMER_BALANCE },
+    );
+}
+
+export function getLatestActivePaymentDate(
+    transactions: readonly CustomerTransaction[],
+    customerId: number,
+): string | null {
+    return transactions.reduce<string | null>(
+        (latestDate, transaction) => {
+            if (
+                transaction.customerId !== customerId ||
+                !isActive(transaction) ||
+                (transaction.type !== "payment_received" &&
+                    transaction.type !== "payment_paid")
+            ) {
+                return latestDate;
+            }
+
+            if (
+                latestDate === null ||
+                Date.parse(transaction.createdAt) >
+                    Date.parse(latestDate)
+            ) {
+                return transaction.createdAt;
+            }
+
+            return latestDate;
+        },
+        null,
     );
 }
 

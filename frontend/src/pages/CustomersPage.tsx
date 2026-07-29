@@ -17,9 +17,12 @@ import { useCustomers } from "../context/CustomersContext";
 import type {
     Currency,
     Customer,
+    CustomerActionResult,
     CustomerBalance,
     CustomerTransaction,
+    CustomerTransactionCorrectionInput,
     CustomerTransactionType,
+    EditableCustomerTransactionType,
 } from "../types/customer";
 import {
     filterTransactionsByCurrency,
@@ -39,6 +42,13 @@ const transactionTypeLabels: Record<
     payment_paid: "دفعة مدفوعة",
     adjustment: "تصحيح",
 };
+
+const editableTransactionTypes: EditableCustomerTransactionType[] = [
+    "debt",
+    "credit",
+    "payment_received",
+    "payment_paid",
+];
 
 function calculateDaysSince(date: string) {
     const referenceDate = new Date(date);
@@ -122,6 +132,8 @@ function CustomersPage() {
         updateCustomer,
         deleteCustomer,
         addTransaction,
+        correctTransaction,
+        voidTransaction,
         getCustomerBalance,
     } = useCustomers();
 
@@ -137,6 +149,10 @@ function CustomersPage() {
     const [isTransactionDialogOpen, setIsTransactionDialogOpen] =
         useState(false);
     const [actionError, setActionError] = useState("");
+    const [transactionToCorrect, setTransactionToCorrect] =
+        useState<CustomerTransaction | null>(null);
+    const [transactionToVoid, setTransactionToVoid] =
+        useState<CustomerTransaction | null>(null);
     const [selectedCurrency, setSelectedCurrency] =
         useState<Currency>("IQD");
     const [detailsCurrency, setDetailsCurrency] =
@@ -589,6 +605,8 @@ function CustomersPage() {
                     )}
                     selectedCurrency={detailsCurrency}
                     onCurrencyChange={setDetailsCurrency}
+                    onCorrectTransaction={setTransactionToCorrect}
+                    onVoidTransaction={setTransactionToVoid}
                     onClose={() => setSelectedCustomerId(null)}
                     onAddTransaction={openTransactionDialog}
                     onEdit={() => {
@@ -615,6 +633,45 @@ function CustomersPage() {
                         clearError={() => setTransactionError("")}
                         onClose={closeTransactionDialog}
                         onSubmit={handleTransactionSubmit}
+                    />,
+                    document.body,
+                )}
+
+            {transactionToCorrect &&
+                createPortal(
+                    <CorrectionDialog
+                        transaction={transactionToCorrect}
+                        onClose={() => setTransactionToCorrect(null)}
+                        onSubmit={(input) => {
+                            const result = correctTransaction(input);
+
+                            if (result.success) {
+                                setTransactionToCorrect(null);
+                            }
+
+                            return result;
+                        }}
+                    />,
+                    document.body,
+                )}
+
+            {transactionToVoid &&
+                createPortal(
+                    <VoidTransactionDialog
+                        transaction={transactionToVoid}
+                        onClose={() => setTransactionToVoid(null)}
+                        onConfirm={(reason) => {
+                            const result = voidTransaction(
+                                transactionToVoid.id,
+                                reason,
+                            );
+
+                            if (result.success) {
+                                setTransactionToVoid(null);
+                            }
+
+                            return result;
+                        }}
                     />,
                     document.body,
                 )}
@@ -838,6 +895,10 @@ type CustomerDetailsDialogProps = {
     transactions: CustomerTransaction[];
     selectedCurrency: Currency;
     onCurrencyChange: (currency: Currency) => void;
+    onCorrectTransaction: (
+        transaction: CustomerTransaction,
+    ) => void;
+    onVoidTransaction: (transaction: CustomerTransaction) => void;
     onClose: () => void;
     onAddTransaction: () => void;
     onEdit: () => void;
@@ -849,6 +910,8 @@ function CustomerDetailsDialog({
     transactions,
     selectedCurrency,
     onCurrencyChange,
+    onCorrectTransaction,
+    onVoidTransaction,
     onClose,
     onAddTransaction,
     onEdit,
@@ -938,7 +1001,7 @@ function CustomerDetailsDialog({
                 </div>
 
                 <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[900px] text-right text-sm">
+                    <table className="w-full min-w-[1100px] text-right text-sm">
                         <thead className="bg-slate-50 text-slate-600">
                             <tr>
                                 <th className="px-4 py-3">التاريخ</th>
@@ -947,13 +1010,27 @@ function CustomerDetailsDialog({
                                 <th className="px-4 py-3">العملة</th>
                                 <th className="px-4 py-3">الملاحظة</th>
                                 <th className="px-4 py-3">الرصيد بعد الحركة</th>
+                                <th className="px-4 py-3">الإجراءات</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {historyRows.map((transaction) => {
                                 return (
-                                    <tr key={transaction.id}>
-                                        <td className="whitespace-nowrap px-4 py-3">
+                                    <tr
+                                        key={transaction.id}
+                                        className={
+                                            transaction.status === "voided"
+                                                ? "bg-slate-50 text-slate-400"
+                                                : ""
+                                        }
+                                    >
+                                        <td
+                                            className={`whitespace-nowrap px-4 py-3 ${
+                                                transaction.status === "voided"
+                                                    ? "line-through"
+                                                    : ""
+                                            }`}
+                                        >
                                             {new Date(
                                                 transaction.createdAt,
                                             ).toLocaleString("ar-IQ", {
@@ -963,8 +1040,27 @@ function CustomerDetailsDialog({
                                         </td>
                                         <td className="px-4 py-3 font-medium">
                                             {transactionTypeLabels[transaction.type]}
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                {transaction.status ===
+                                                    "voided" && (
+                                                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                        ملغاة
+                                                    </span>
+                                                )}
+                                                {transaction.createdByCorrection && (
+                                                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                                        حركة مصححة
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-4 py-3 font-semibold">
+                                        <td
+                                            className={`px-4 py-3 font-semibold ${
+                                                transaction.status === "voided"
+                                                    ? "line-through"
+                                                    : ""
+                                            }`}
+                                        >
                                             {formatBalance(
                                                 transaction.amount,
                                                 selectedCurrency,
@@ -973,6 +1069,18 @@ function CustomerDetailsDialog({
                                         <td className="px-4 py-3">{transaction.currency}</td>
                                         <td className="max-w-xs px-4 py-3 text-slate-600">
                                             {transaction.note || "—"}
+                                            {transaction.createdByCorrection && (
+                                                <p className="mt-1 text-xs text-blue-700">
+                                                    بديلة عن حركة سابقة
+                                                </p>
+                                            )}
+                                            {transaction.status === "voided" &&
+                                                transaction.voidReason && (
+                                                    <p className="mt-1 text-xs text-slate-500">
+                                                        السبب:{" "}
+                                                        {transaction.voidReason}
+                                                    </p>
+                                                )}
                                         </td>
                                         <td className="px-4 py-3 font-semibold">
                                             {formatBalance(
@@ -980,6 +1088,34 @@ function CustomerDetailsDialog({
                                                     transaction.currency
                                                 ],
                                                 transaction.currency,
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {transaction.status === "active" && (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onCorrectTransaction(
+                                                                transaction,
+                                                            )
+                                                        }
+                                                        className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                                    >
+                                                        تصحيح
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            onVoidTransaction(
+                                                                transaction,
+                                                            )
+                                                        }
+                                                        className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                                                    >
+                                                        إلغاء
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>
@@ -1014,6 +1150,287 @@ type TransactionDialogProps = {
     onClose: () => void;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
+
+function CorrectionDialog({
+    transaction,
+    onClose,
+    onSubmit,
+}: {
+    transaction: CustomerTransaction;
+    onClose: () => void;
+    onSubmit: (
+        input: CustomerTransactionCorrectionInput,
+    ) => CustomerActionResult;
+}) {
+    const [type, setType] =
+        useState<EditableCustomerTransactionType>(
+            transaction.type === "adjustment"
+                ? "debt"
+                : transaction.type,
+        );
+    const [amount, setAmount] = useState(
+        transaction.amount.toString(),
+    );
+    const [note, setNote] = useState(transaction.note);
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+
+    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        const numericAmount = Number(amount);
+
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            setError("يجب أن يكون المبلغ المصحح أكبر من صفر.");
+            return;
+        }
+
+        if (!reason.trim()) {
+            setError("سبب التصحيح مطلوب.");
+            return;
+        }
+
+        const result = onSubmit({
+            transactionId: transaction.id,
+            type,
+            amount: numericAmount,
+            note,
+            reason,
+        });
+
+        if (!result.success) {
+            setError(result.error);
+        }
+    }
+
+    return (
+        <AuditModalShell title="تصحيح الحركة" onClose={onClose}>
+            <form onSubmit={handleSubmit} className="p-5">
+                <div className="mb-5 rounded-xl bg-slate-50 p-4">
+                    <p className="mb-3 text-sm font-bold">
+                        بيانات الحركة الأصلية
+                    </p>
+                    <div className="grid gap-3 text-sm sm:grid-cols-2">
+                        <InfoBox
+                            label="التاريخ"
+                            value={new Date(
+                                transaction.createdAt,
+                            ).toLocaleString("ar-IQ")}
+                        />
+                        <InfoBox
+                            label="النوع"
+                            value={
+                                transactionTypeLabels[transaction.type]
+                            }
+                        />
+                        <InfoBox
+                            label="المبلغ"
+                            value={formatBalance(
+                                transaction.amount,
+                                transaction.currency,
+                            )}
+                        />
+                        <InfoBox
+                            label="العملة"
+                            value={transaction.currency}
+                        />
+                        <div className="sm:col-span-2">
+                            <InfoBox
+                                label="الملاحظة"
+                                value={transaction.note || "—"}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField label="نوع الحركة المصحح">
+                        <select
+                            value={type}
+                            onChange={(event) => {
+                                setType(
+                                    event.target
+                                        .value as EditableCustomerTransactionType,
+                                );
+                                setError("");
+                            }}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            required
+                        >
+                            {editableTransactionTypes.map(
+                                (transactionType) => (
+                                    <option
+                                        key={transactionType}
+                                        value={transactionType}
+                                    >
+                                        {
+                                            transactionTypeLabels[
+                                                transactionType
+                                            ]
+                                        }
+                                    </option>
+                                ),
+                            )}
+                        </select>
+                    </FormField>
+                    <FormField label="العملة">
+                        <input
+                            value={transaction.currency}
+                            readOnly
+                            className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-500"
+                        />
+                    </FormField>
+                    <FormField label="المبلغ المصحح">
+                        <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={amount}
+                            onChange={(event) => {
+                                setAmount(event.target.value);
+                                setError("");
+                            }}
+                            className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            required
+                        />
+                    </FormField>
+                    <FormField label="سبب التصحيح">
+                        <input
+                            value={reason}
+                            onChange={(event) => {
+                                setReason(event.target.value);
+                                setError("");
+                            }}
+                            className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            required
+                        />
+                    </FormField>
+                    <FormField
+                        label="الملاحظة المصححة"
+                        className="sm:col-span-2"
+                    >
+                        <textarea
+                            value={note}
+                            onChange={(event) => {
+                                setNote(event.target.value);
+                                setError("");
+                            }}
+                            rows={3}
+                            className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                        />
+                    </FormField>
+                </div>
+                <DialogError error={error} />
+                <DialogActions
+                    onClose={onClose}
+                    submitLabel="حفظ التصحيح"
+                />
+            </form>
+        </AuditModalShell>
+    );
+}
+
+function VoidTransactionDialog({
+    transaction,
+    onClose,
+    onConfirm,
+}: {
+    transaction: CustomerTransaction;
+    onClose: () => void;
+    onConfirm: (reason: string) => CustomerActionResult;
+}) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+
+    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+
+        if (!reason.trim()) {
+            setError("سبب الإلغاء مطلوب.");
+            return;
+        }
+
+        const result = onConfirm(reason);
+
+        if (!result.success) {
+            setError(result.error);
+        }
+    }
+
+    return (
+        <AuditModalShell title="إلغاء الحركة" onClose={onClose}>
+            <form onSubmit={handleSubmit} className="p-5">
+                <p className="text-sm leading-6 text-slate-600">
+                    سيتم إلغاء حركة{" "}
+                    <strong>
+                        {transactionTypeLabels[transaction.type]} بقيمة{" "}
+                        {formatBalance(
+                            transaction.amount,
+                            transaction.currency,
+                        )}
+                    </strong>
+                    . ستبقى الحركة ظاهرة في السجل ولن تؤثر في الرصيد.
+                </p>
+                <FormField label="سبب الإلغاء" className="mt-5">
+                    <textarea
+                        value={reason}
+                        onChange={(event) => {
+                            setReason(event.target.value);
+                            setError("");
+                        }}
+                        rows={3}
+                        className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                        required
+                        autoFocus
+                    />
+                </FormField>
+                <DialogError error={error} />
+                <DialogActions
+                    onClose={onClose}
+                    submitLabel="تأكيد الإلغاء"
+                />
+            </form>
+        </AuditModalShell>
+    );
+}
+
+function AuditModalShell({
+    title,
+    onClose,
+    children,
+}: {
+    title: string;
+    onClose: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="إغلاق النافذة"
+                className="fixed inset-0 bg-slate-950/70"
+            />
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="relative z-[121] max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+            >
+                <div className="flex items-center justify-between border-b border-slate-200 p-5">
+                    <h4 className="text-lg font-bold">{title}</h4>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="إغلاق"
+                        className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                {children}
+            </div>
+        </div>
+    );
+}
 
 function TransactionDialog(props: TransactionDialogProps) {
     return (
@@ -1050,10 +1467,10 @@ function TransactionDialog(props: TransactionDialogProps) {
                                 }}
                                 className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
                             >
-                                {Object.entries(transactionTypeLabels).map(
-                                    ([value, label]) => (
+                                {editableTransactionTypes.map(
+                                    (value) => (
                                         <option key={value} value={value}>
-                                            {label}
+                                            {transactionTypeLabels[value]}
                                         </option>
                                     ),
                                 )}
@@ -1100,9 +1517,6 @@ function TransactionDialog(props: TransactionDialogProps) {
                             />
                         </FormField>
                     </div>
-                    <p className="mt-4 text-xs leading-5 text-slate-500">
-                        التصحيح يزيد الرصيد المستحق للمعرض. استخدم دين للعميل لتخفيض الرصيد.
-                    </p>
                     <DialogError error={props.error} />
                     <DialogActions onClose={props.onClose} submitLabel="حفظ الحركة" />
                 </form>

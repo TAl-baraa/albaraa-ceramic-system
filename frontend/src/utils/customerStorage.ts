@@ -64,6 +64,18 @@ export function parseStoredCustomerTransaction(
     }
 
     const amount = parsePositiveAmount(value.amount);
+    const status =
+        value.status === "voided" ? "voided" : "active";
+    const correctedTransactionId =
+        isFiniteNonNegativeNumber(value.correctedTransactionId)
+            ? value.correctedTransactionId
+            : null;
+    const voidedAt =
+        value.voidedAt === null || value.voidedAt === undefined
+            ? null
+            : isValidDate(value.voidedAt)
+              ? value.voidedAt
+              : null;
 
     if (
         !isFiniteNonNegativeNumber(value.id) ||
@@ -85,7 +97,21 @@ export function parseStoredCustomerTransaction(
         currency: value.currency,
         note: value.note,
         createdAt: value.createdAt,
+        recordedAt: isValidDate(value.recordedAt)
+            ? value.recordedAt
+            : value.createdAt,
         // Persisted snapshots are derived data and may be stale or incorrect.
         balanceAfter: { IQD: 0, USD: 0 },
+        status,
+        correctedTransactionId,
+        voidedAt,
+        voidReason:
+            typeof value.voidReason === "string"
+                ? value.voidReason
+                : "",
+        createdByCorrection:
+            typeof value.createdByCorrection === "boolean"
+                ? value.createdByCorrection
+                : false,
     };
 }

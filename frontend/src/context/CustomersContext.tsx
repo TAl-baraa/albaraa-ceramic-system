@@ -13,11 +13,13 @@ import type {
     CustomerBalance,
     CustomerInput,
     CustomerTransaction,
+    CustomerTransactionCorrectionInput,
     CustomerTransactionInput,
-    CustomerTransactionType,
+    EditableCustomerTransactionType,
 } from "../types/customer";
 import {
     calculateCustomerNetBalance,
+    getLatestActivePaymentDate,
     recalculateAllTransactionBalances,
 } from "../utils/customerBalance";
 import { parseStoredCustomerTransaction } from "../utils/customerStorage";
@@ -33,6 +35,13 @@ type CustomersContextValue = {
     deleteCustomer: (customerId: number) => CustomerActionResult;
     addTransaction: (
         transaction: CustomerTransactionInput,
+    ) => CustomerActionResult;
+    correctTransaction: (
+        correction: CustomerTransactionCorrectionInput,
+    ) => CustomerActionResult;
+    voidTransaction: (
+        transactionId: number,
+        reason: string,
     ) => CustomerActionResult;
     getCustomerBalance: (customerId: number) => CustomerBalance;
 };
@@ -63,15 +72,14 @@ function isCurrency(value: unknown): value is Currency {
     return value === "IQD" || value === "USD";
 }
 
-function isTransactionType(
+function isEditableTransactionType(
     value: unknown,
-): value is CustomerTransactionType {
+): value is EditableCustomerTransactionType {
     return (
         value === "debt" ||
         value === "credit" ||
         value === "payment_received" ||
-        value === "payment_paid" ||
-        value === "adjustment"
+        value === "payment_paid"
     );
 }
 
@@ -187,6 +195,21 @@ export function CustomersProvider({
         } catch {
             // Keep the in-memory transaction history usable when storage fails.
         }
+    }, [transactions]);
+
+    useEffect(() => {
+        setCustomers((currentCustomers) =>
+            currentCustomers.map((customer) => {
+                const lastPaymentAt = getLatestActivePaymentDate(
+                    transactions,
+                    customer.id,
+                );
+
+                return customer.lastPaymentAt === lastPaymentAt
+                    ? customer
+                    : { ...customer, lastPaymentAt };
+            }),
+        );
     }, [transactions]);
 
     function phoneExists(phone: string, excludedCustomerId?: number) {
@@ -310,7 +333,7 @@ export function CustomersProvider({
             return { success: false, error: "العميل غير موجود." };
         }
 
-        if (!isTransactionType(input.type)) {
+        if (!isEditableTransactionType(input.type)) {
             return { success: false, error: "نوع الحركة غير صالح." };
         }
 
@@ -334,7 +357,13 @@ export function CustomersProvider({
             currency: input.currency,
             note: input.note.trim(),
             createdAt,
+            recordedAt: createdAt,
             balanceAfter: { IQD: 0, USD: 0 },
+            status: "active",
+            correctedTransactionId: null,
+            voidedAt: null,
+            voidReason: "",
+            createdByCorrection: false,
         };
 
         setTransactions((currentTransactions) => {
@@ -352,18 +381,129 @@ export function CustomersProvider({
             );
         });
 
-        if (
-            input.type === "payment_received" ||
-            input.type === "payment_paid"
-        ) {
-            setCustomers((currentCustomers) =>
-                currentCustomers.map((customer) =>
-                    customer.id === input.customerId
-                        ? { ...customer, lastPaymentAt: createdAt }
-                        : customer,
-                ),
-            );
+        return { success: true };
+    }
+
+    function correctTransaction(
+        input: CustomerTransactionCorrectionInput,
+    ): CustomerActionResult {
+        const original = transactions.find(
+            (transaction) => transaction.id === input.transactionId,
+        );
+        const reason = input.reason.trim();
+
+        if (!original) {
+            return { success: false, error: "الحركة غير موجودة." };
         }
+
+        if (original.status === "voided") {
+            return {
+                success: false,
+                error: "لا يمكن تصحيح حركة ملغاة.",
+            };
+        }
+
+        if (!isEditableTransactionType(input.type)) {
+            return { success: false, error: "نوع الحركة مطلوب." };
+        }
+
+        if (!Number.isFinite(input.amount) || input.amount <= 0) {
+            return {
+                success: false,
+                error: "يجب أن يكون المبلغ المصحح أكبر من صفر.",
+            };
+        }
+
+        if (!reason) {
+            return { success: false, error: "سبب التصحيح مطلوب." };
+        }
+
+        const correctedAt = new Date().toISOString();
+        const replacement: CustomerTransaction = {
+            ...original,
+            id: makeId(transactions.map(({ id }) => id)),
+            type: input.type,
+            amount: normalizeAmount(input.amount),
+            note: input.note.trim(),
+            recordedAt: correctedAt,
+            balanceAfter: { IQD: 0, USD: 0 },
+            status: "active",
+            correctedTransactionId: original.id,
+            voidedAt: null,
+            voidReason: "",
+            createdByCorrection: true,
+        };
+
+        setTransactions((currentTransactions) =>
+            recalculateAllTransactionBalances([
+                ...currentTransactions.map((transaction) =>
+                    transaction.id === original.id
+                        ? {
+                              ...transaction,
+                              status: "voided" as const,
+                              voidedAt: correctedAt,
+                              voidReason: reason,
+                          }
+                        : transaction,
+                ),
+                replacement,
+            ]).toSorted(
+                (first, second) =>
+                    Date.parse(second.createdAt) -
+                        Date.parse(first.createdAt) ||
+                    second.id - first.id,
+            ),
+        );
+
+        return { success: true };
+    }
+
+    function voidTransaction(
+        transactionId: number,
+        cancellationReason: string,
+    ): CustomerActionResult {
+        const transaction = transactions.find(
+            (currentTransaction) =>
+                currentTransaction.id === transactionId,
+        );
+        const reason = cancellationReason.trim();
+
+        if (!transaction) {
+            return { success: false, error: "الحركة غير موجودة." };
+        }
+
+        if (transaction.status === "voided") {
+            return {
+                success: false,
+                error: "الحركة ملغاة بالفعل.",
+            };
+        }
+
+        if (!reason) {
+            return { success: false, error: "سبب الإلغاء مطلوب." };
+        }
+
+        const voidedAt = new Date().toISOString();
+
+        setTransactions((currentTransactions) =>
+            recalculateAllTransactionBalances(
+                currentTransactions.map((currentTransaction) =>
+                    currentTransaction.id === transactionId
+                        ? {
+                              ...currentTransaction,
+                              status: "voided" as const,
+                              voidedAt,
+                              voidReason: reason,
+                          }
+                        : currentTransaction,
+                ),
+            ).toSorted(
+                (first, second) =>
+                    Date.parse(second.createdAt) -
+                        Date.parse(first.createdAt) ||
+                    second.id - first.id,
+            ),
+        );
 
         return { success: true };
     }
@@ -384,6 +524,8 @@ export function CustomersProvider({
                 updateCustomer,
                 deleteCustomer,
                 addTransaction,
+                correctTransaction,
+                voidTransaction,
                 getCustomerBalance,
             }}
         >
