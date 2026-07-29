@@ -4,6 +4,7 @@ import {
     LayoutDashboard,
     Menu,
     Package,
+    ReceiptText,
     Settings,
     Users,
     Warehouse,
@@ -26,6 +27,11 @@ const menuItems = [
         label: "المخزون",
         path: "/inventory",
         icon: Warehouse,
+    },
+    {
+        label: "المبيعات",
+        path: "/sales",
+        icon: ReceiptText,
     },
     {
         label: "العملاء",
@@ -52,6 +58,10 @@ const pageTitles: Record<string, { title: string; description: string }> = {
         title: "المخزون",
         description: "متابعة الكميات وحركات المخزون",
     },
+    "/sales": {
+        title: "المبيعات",
+        description: "إدارة فواتير البيع والمدفوعات",
+    },
     "/customers": {
         title: "العملاء",
         description: "إدارة بيانات العملاء وحساباتهم",
@@ -67,7 +77,10 @@ function AdminLayout() {
     const location = useLocation();
 
     const currentPage =
-        pageTitles[location.pathname] ?? pageTitles["/dashboard"];
+        pageTitles[location.pathname] ??
+        (location.pathname.startsWith("/sales/")
+            ? pageTitles["/sales"]
+            : pageTitles["/dashboard"]);
 
     return (
         <div dir="rtl" className="min-h-screen bg-slate-100 text-slate-900">
