@@ -1,381 +1,547 @@
+import type { FormEvent, ReactNode } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
     AlertTriangle,
-    CheckCircle2,
-    Clock3,
+    Eye,
+    Pencil,
     Plus,
     Search,
+    Trash2,
     Users,
     WalletCards,
+    X,
 } from "lucide-react";
-import { useState } from "react";
 
-/*
- * يمثل البيانات الحالية لعميل واحد.
- *
- * balance:
- * رقم موجب  = لنا مبلغ على العميل.
- * رقم سالب  = للعميل مبلغ علينا.
- * صفر       = الحساب مسدد.
- *
- * lastPaymentDate:
- * تاريخ آخر دفعة دفعها العميل.
- * تكون null إذا لم يسجل العميل أي دفعة حتى الآن.
- */
-type Customer = {
-    id: number;
-    name: string;
-    phone: string;
-    balance: number;
-    createdAt: string;
-    lastPaymentDate: string | null;
-};
+import { useCustomers } from "../context/CustomersContext";
+import type {
+    Currency,
+    Customer,
+    CustomerBalance,
+    CustomerTransaction,
+    CustomerTransactionType,
+} from "../types/customer";
+import {
+    filterTransactionsByCurrency,
+    recalculateCustomerTransactionHistory,
+} from "../utils/customerBalance";
 
-/*
- * بيانات مؤقتة لاختبار الواجهة.
- *
- * لاحقًا لن نخزن الرصيد بهذه الطريقة فقط،
- * بل سيحسب من جميع الحركات المالية الخاصة بالعميل.
- */
-const customers: Customer[] = [
-    {
-        id: 1,
-        name: "أحمد محمد",
-        phone: "07701234567",
-        balance: 50000,
-        createdAt: "2026-06-01",
-        lastPaymentDate: "2026-07-10",
-    },
-    {
-        id: 2,
-        name: "محمود علي",
-        phone: "07811234567",
-        balance: -500000,
-        createdAt: "2026-05-15",
-        lastPaymentDate: null,
-    },
-    {
-        id: 3,
-        name: "شركة إعمار الموصل",
-        phone: "07501234567",
-        balance: 150000,
-        createdAt: "2026-05-20",
-        lastPaymentDate: "2026-06-12",
-    },
-    {
-        id: 4,
-        name: "علي حسن",
-        phone: "07721234567",
-        balance: 0,
-        createdAt: "2026-07-01",
-        lastPaymentDate: "2026-07-18",
-    },
-];
-
-/*
- * عدد المللي ثانية الموجودة في يوم واحد.
- * نستخدمه لتحويل فرق الوقت إلى عدد أيام.
- */
+const OVERDUE_DAYS = 30;
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
 
-/*
- * تحسب عدد الأيام منذ تاريخ معين وحتى اليوم.
- */
+const transactionTypeLabels: Record<
+    CustomerTransactionType,
+    string
+> = {
+    debt: "دين على العميل",
+    credit: "دين للعميل",
+    payment_received: "دفعة مستلمة",
+    payment_paid: "دفعة مدفوعة",
+    adjustment: "تصحيح",
+};
+
 function calculateDaysSince(date: string) {
-    const referenceDate = new Date(`${date}T00:00:00`);
+    const referenceDate = new Date(date);
     const today = new Date();
-
-    /*
-     * نزيل تأثير الساعة والدقائق حتى يكون الحساب
-     * معتمدًا على التاريخ فقط.
-     */
+    referenceDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
-
-    const differenceInMilliseconds =
-        today.getTime() - referenceDate.getTime();
 
     return Math.max(
         0,
-        Math.floor(differenceInMilliseconds / MILLISECONDS_PER_DAY),
+        Math.floor(
+            (today.getTime() - referenceDate.getTime()) /
+                MILLISECONDS_PER_DAY,
+        ),
     );
 }
 
-/*
- * تحدد حالة دفع العميل.
- *
- * إذا لم يسبق للعميل الدفع، نبدأ الحساب من تاريخ إضافته.
- * إذا دفع سابقًا، نبدأ الحساب من تاريخ آخر دفعة.
- */
-function getPaymentStatus(customer: Customer) {
-    if (customer.balance === 0) {
+function isCustomerOverdue(
+    customer: Customer,
+    balance: number,
+) {
+    const referenceDate =
+        customer.lastPaymentAt ?? customer.createdAt;
+
+    return (
+        balance > 0 &&
+        calculateDaysSince(referenceDate) > OVERDUE_DAYS
+    );
+}
+
+function getBalanceStatus(balance: number) {
+    if (balance > 0) {
         return {
-            label: "الحساب مسدد",
-            description: "لا توجد مستحقات حالية",
-            className: "bg-emerald-50 text-emerald-700",
-            icon: CheckCircle2,
+            label: "عليه لنا",
+            className: "bg-red-50 text-red-700",
         };
     }
 
-    const referenceDate =
-        customer.lastPaymentDate ?? customer.createdAt;
-
-    const daysSincePayment = calculateDaysSince(referenceDate);
-
-    if (daysSincePayment > 30) {
+    if (balance < 0) {
         return {
-            label: "متأخر عن الدفع",
-            description: `منذ ${daysSincePayment.toLocaleString("ar-IQ")} يومًا`,
-            className: "bg-red-50 text-red-700",
-            icon: AlertTriangle,
+            label: "له علينا",
+            className: "bg-blue-50 text-blue-700",
         };
     }
 
     return {
-        label: "ضمن المدة",
-        description: `منذ ${daysSincePayment.toLocaleString("ar-IQ")} يومًا`,
-        className: "bg-amber-50 text-amber-700",
-        icon: Clock3,
+        label: "مسدد",
+        className: "bg-emerald-50 text-emerald-700",
     };
 }
 
-/*
- * تنسيق الرصيد بطريقة توضح اتجاه الدين.
- */
-function formatCustomerBalance(balance: number) {
-    const formattedAmount = Math.abs(balance).toLocaleString("ar-IQ");
-
-    if (balance > 0) {
-        return `${formattedAmount} د.ع لنا عليه`;
+function formatBalance(amount: number, currency: Currency) {
+    if (currency === "USD") {
+        return `USD ${amount.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`;
     }
 
-    if (balance < 0) {
-        return `${formattedAmount} د.ع له علينا`;
-    }
+    return `${amount.toLocaleString("ar-IQ", {
+        maximumFractionDigits: 6,
+    })} IQD`;
+}
 
-    return "الحساب مسدد";
+function formatSummaryAmount(amount: number, currency: Currency) {
+    return amount.toLocaleString(
+        currency === "IQD" ? "ar-IQ" : "en-US",
+        currency === "USD"
+            ? {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+              }
+            : { maximumFractionDigits: 6 },
+    );
 }
 
 function CustomersPage() {
+    const {
+        customers,
+        transactions,
+        addCustomer,
+        updateCustomer,
+        deleteCustomer,
+        addTransaction,
+        getCustomerBalance,
+    } = useCustomers();
+
     const [searchTerm, setSearchTerm] = useState("");
+    const [isCustomerDialogOpen, setIsCustomerDialogOpen] =
+        useState(false);
+    const [customerToEdit, setCustomerToEdit] =
+        useState<Customer | null>(null);
+    const [customerToDelete, setCustomerToDelete] =
+        useState<Customer | null>(null);
+    const [selectedCustomerId, setSelectedCustomerId] =
+        useState<number | null>(null);
+    const [isTransactionDialogOpen, setIsTransactionDialogOpen] =
+        useState(false);
+    const [actionError, setActionError] = useState("");
+    const [selectedCurrency, setSelectedCurrency] =
+        useState<Currency>("IQD");
+    const [detailsCurrency, setDetailsCurrency] =
+        useState<Currency>("IQD");
 
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const [customerName, setCustomerName] = useState("");
+    const [customerPhone, setCustomerPhone] = useState("");
+    const [customerAddress, setCustomerAddress] = useState("");
+    const [customerNotes, setCustomerNotes] = useState("");
+    const [customerFormError, setCustomerFormError] = useState("");
 
-    // البحث بالاسم أو رقم الهاتف.
-    const filteredCustomers = customers.filter((customer) => {
-        return (
-            customer.name.toLowerCase().includes(normalizedSearch) ||
-            customer.phone.includes(normalizedSearch)
-        );
-    });
+    const [transactionType, setTransactionType] =
+        useState<CustomerTransactionType>("debt");
+    const [transactionAmount, setTransactionAmount] = useState("");
+    const [transactionCurrency, setTransactionCurrency] =
+        useState<Currency>("IQD");
+    const [transactionNote, setTransactionNote] = useState("");
+    const [transactionError, setTransactionError] = useState("");
 
-    /*
-     * نجمع الأرصدة الموجبة فقط.
-     *
-     * مثال:
-     * عميل كان عليه 100 ودفع 50، يصبح رصيده 50.
-     * عميل كان عليه 500 ودفع 350، يصبح رصيده 150.
-     * الإجمالي الصحيح هو 200.
-     */
-    const totalCustomersOweUs = customers
-        .filter((customer) => customer.balance > 0)
-        .reduce((total, customer) => {
-            return total + customer.balance;
-        }, 0);
-
-    /*
-     * نجمع الأرصدة السالبة فقط.
-     *
-     * نستخدم Math.abs لتحويل الناتج إلى رقم موجب للعرض.
-     */
-    const totalWeOweCustomers = Math.abs(
-        customers
-            .filter((customer) => customer.balance < 0)
-            .reduce((total, customer) => {
-                return total + customer.balance;
-            }, 0),
+    const selectedCustomer = customers.find(
+        (customer) => customer.id === selectedCustomerId,
     );
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filteredCustomers = customers.filter(
+        (customer) =>
+            customer.name.toLowerCase().includes(normalizedSearch) ||
+            customer.phone.includes(normalizedSearch),
+    );
+    const customerBalances = customers.map((customer) => ({
+        customer,
+        balance: getCustomerBalance(customer.id),
+    }));
+    const totalCustomersOweUs = customerBalances.reduce(
+        (total, { balance }) =>
+            total + Math.max(balance[selectedCurrency], 0),
+        0,
+    );
+    const totalWeOweCustomers = customerBalances.reduce(
+        (total, { balance }) =>
+            total +
+            Math.abs(Math.min(balance[selectedCurrency], 0)),
+        0,
+    );
+    const overdueCustomersCount = customerBalances.filter(
+        ({ customer, balance }) =>
+            isCustomerOverdue(
+                customer,
+                balance[selectedCurrency],
+            ),
+    ).length;
+    const currencyArabicName =
+        selectedCurrency === "IQD" ? "الدينار" : "الدولار";
+    const currencyUnit =
+        selectedCurrency === "IQD"
+            ? "دينار عراقي"
+            : "دولار أمريكي";
+
+    function resetCustomerForm() {
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setCustomerNotes("");
+        setCustomerFormError("");
+    }
+
+    function openAddCustomerDialog() {
+        setCustomerToEdit(null);
+        resetCustomerForm();
+        setIsCustomerDialogOpen(true);
+    }
+
+    function openEditCustomerDialog(customer: Customer) {
+        setCustomerToEdit(customer);
+        setCustomerName(customer.name);
+        setCustomerPhone(customer.phone);
+        setCustomerAddress(customer.address);
+        setCustomerNotes(customer.notes);
+        setCustomerFormError("");
+        setIsCustomerDialogOpen(true);
+    }
+
+    function closeCustomerDialog() {
+        setIsCustomerDialogOpen(false);
+        setCustomerToEdit(null);
+        resetCustomerForm();
+    }
+
+    function handleCustomerSubmit(
+        event: FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+
+        if (!customerName.trim()) {
+            setCustomerFormError("اسم العميل مطلوب.");
+            return;
+        }
+
+        const input = {
+            name: customerName,
+            phone: customerPhone,
+            address: customerAddress,
+            notes: customerNotes,
+        };
+        const result = customerToEdit
+            ? updateCustomer(customerToEdit.id, input)
+            : addCustomer(input);
+
+        if (!result.success) {
+            setCustomerFormError(result.error);
+            return;
+        }
+
+        closeCustomerDialog();
+    }
+
+    function requestCustomerDeletion(customer: Customer) {
+        setActionError("");
+
+        if (
+            transactions.some(
+                (transaction) =>
+                    transaction.customerId === customer.id,
+            )
+        ) {
+            setActionError(
+                `لا يمكن حذف العميل ${customer.name} لوجود حركات مالية مسجلة.`,
+            );
+            return;
+        }
+
+        setCustomerToDelete(customer);
+    }
+
+    function handleCustomerDeletion() {
+        if (!customerToDelete) {
+            return;
+        }
+
+        const result = deleteCustomer(customerToDelete.id);
+
+        if (!result.success) {
+            setActionError(result.error);
+            setCustomerToDelete(null);
+            return;
+        }
+
+        if (selectedCustomerId === customerToDelete.id) {
+            setSelectedCustomerId(null);
+        }
+        setCustomerToDelete(null);
+    }
+
+    function resetTransactionForm(currency: Currency = detailsCurrency) {
+        setTransactionType("debt");
+        setTransactionAmount("");
+        setTransactionCurrency(currency);
+        setTransactionNote("");
+        setTransactionError("");
+    }
+
+    function openTransactionDialog() {
+        resetTransactionForm(detailsCurrency);
+        setIsTransactionDialogOpen(true);
+    }
+
+    function closeTransactionDialog() {
+        setIsTransactionDialogOpen(false);
+        resetTransactionForm(detailsCurrency);
+    }
+
+    function openCustomerDetails(customerId: number) {
+        setDetailsCurrency(selectedCurrency);
+        setSelectedCustomerId(customerId);
+    }
+
+    function handleTransactionSubmit(
+        event: FormEvent<HTMLFormElement>,
+    ) {
+        event.preventDefault();
+
+        if (!selectedCustomer) {
+            setTransactionError("العميل غير موجود.");
+            return;
+        }
+
+        const amount = Number(transactionAmount);
+
+        if (
+            transactionAmount.trim() === "" ||
+            !Number.isFinite(amount) ||
+            amount <= 0
+        ) {
+            setTransactionError("يجب أن يكون المبلغ أكبر من صفر.");
+            return;
+        }
+
+        const result = addTransaction({
+            customerId: selectedCustomer.id,
+            type: transactionType,
+            amount,
+            currency: transactionCurrency,
+            note: transactionNote,
+        });
+
+        if (!result.success) {
+            setTransactionError(result.error);
+            return;
+        }
+
+        closeTransactionDialog();
+    }
 
     return (
         <section>
-            {/* عنوان الصفحة وزر إضافة عميل */}
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-2xl font-bold">العملاء</h3>
-
                     <p className="mt-1 text-sm text-slate-500">
                         إدارة بيانات العملاء ومتابعة أرصدتهم وحالة الدفع.
                     </p>
                 </div>
-
-                <button
-                    type="button"
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                >
-                    <Plus size={18} />
-                    <span>إضافة عميل</span>
-                </button>
+                <div className="flex flex-col gap-3 sm:items-end">
+                    <CurrencySegmentedControl
+                        value={selectedCurrency}
+                        onChange={setSelectedCurrency}
+                        ariaLabel="عملة عرض حسابات العملاء"
+                    />
+                    <button
+                        type="button"
+                        onClick={openAddCustomerDialog}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    >
+                        <Plus size={18} />
+                        <span>إضافة عميل</span>
+                    </button>
+                </div>
             </div>
 
-            {/* بطاقات ملخص العملاء */}
-            <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                إجمالي العملاء
-                            </p>
-
-                            <p className="mt-2 text-3xl font-bold">
-                                {customers.length.toLocaleString("ar-IQ")}
-                            </p>
-                        </div>
-
-                        <div className="rounded-xl bg-slate-100 p-3 text-slate-700">
-                            <Users size={22} />
-                        </div>
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                صافي ديون العملاء لنا
-                            </p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalCustomersOweUs.toLocaleString("ar-IQ")}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                دينار عراقي
-                            </p>
-                        </div>
-
-                        <div className="rounded-xl bg-red-50 p-3 text-red-700">
-                            <WalletCards size={22} />
-                        </div>
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2 xl:col-span-1">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                صافي ديوننا للعملاء
-                            </p>
-
-                            <p className="mt-2 text-2xl font-bold">
-                                {totalWeOweCustomers.toLocaleString("ar-IQ")}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-500">
-                                دينار عراقي
-                            </p>
-                        </div>
-
-                        <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700">
-                            <WalletCards size={22} />
-                        </div>
-                    </div>
-                </article>
+            <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <SummaryCard
+                    label="إجمالي العملاء"
+                    value={customers.length.toLocaleString("ar-IQ")}
+                    icon={<Users size={22} />}
+                    iconClassName="bg-slate-100 text-slate-700"
+                />
+                <SummaryCard
+                    label={`ديون العملاء لنا ب${currencyArabicName}`}
+                    value={formatSummaryAmount(
+                        totalCustomersOweUs,
+                        selectedCurrency,
+                    )}
+                    unit={currencyUnit}
+                    icon={<WalletCards size={22} />}
+                    iconClassName="bg-red-50 text-red-700"
+                />
+                <SummaryCard
+                    label={`ديوننا للعملاء ب${currencyArabicName}`}
+                    value={formatSummaryAmount(
+                        totalWeOweCustomers,
+                        selectedCurrency,
+                    )}
+                    unit={currencyUnit}
+                    icon={<WalletCards size={22} />}
+                    iconClassName="bg-blue-50 text-blue-700"
+                />
+                <SummaryCard
+                    label="عملاء متأخرون"
+                    value={overdueCustomersCount.toLocaleString("ar-IQ")}
+                    unit="عميل"
+                    icon={<AlertTriangle size={22} />}
+                    iconClassName="bg-amber-50 text-amber-700"
+                />
             </div>
+
+            {actionError && (
+                <div className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <span>{actionError}</span>
+                    <button
+                        type="button"
+                        onClick={() => setActionError("")}
+                        aria-label="إغلاق الرسالة"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
 
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {/* البحث بالاسم أو رقم الهاتف */}
                 <div className="border-b border-slate-200 p-4 sm:p-5">
                     <div className="relative max-w-md">
                         <Search
                             size={19}
                             className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                         />
-
                         <input
                             type="search"
                             value={searchTerm}
-                            onChange={(event) => setSearchTerm(event.target.value)}
+                            onChange={(event) =>
+                                setSearchTerm(event.target.value)
+                            }
                             placeholder="ابحث بالاسم أو رقم الهاتف"
                             className="w-full rounded-xl border border-slate-200 py-3 pr-10 pl-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                         />
                     </div>
                 </div>
 
-                {/* جدول العملاء */}
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[850px] text-right text-sm">
+                    <table className="w-full min-w-[1050px] text-right text-sm">
                         <thead className="bg-slate-50 text-slate-600">
                             <tr>
+                                <th className="px-5 py-4 font-semibold">الاسم</th>
+                                <th className="px-5 py-4 font-semibold">الهاتف</th>
                                 <th className="px-5 py-4 font-semibold">
-                                    العميل
+                                    صافي الحساب {selectedCurrency}
                                 </th>
-
-                                <th className="px-5 py-4 font-semibold">
-                                    رقم الهاتف
-                                </th>
-
-                                <th className="px-5 py-4 font-semibold">
-                                    صافي الحساب
-                                </th>
-
-                                <th className="px-5 py-4 font-semibold">
-                                    حالة الدفع
-                                </th>
+                                <th className="px-5 py-4 font-semibold">آخر دفعة</th>
+                                <th className="px-5 py-4 font-semibold">الحالة</th>
+                                <th className="px-5 py-4 font-semibold">الإجراءات</th>
                             </tr>
                         </thead>
-
                         <tbody className="divide-y divide-slate-100">
                             {filteredCustomers.map((customer) => {
-                                const paymentStatus = getPaymentStatus(customer);
-                                const StatusIcon = paymentStatus.icon;
+                                const balance = getCustomerBalance(customer.id);
+                                const selectedBalance =
+                                    balance[selectedCurrency];
+                                const status =
+                                    getBalanceStatus(selectedBalance);
+                                const overdue = isCustomerOverdue(
+                                    customer,
+                                    selectedBalance,
+                                );
 
                                 return (
                                     <tr
                                         key={customer.id}
+                                        onClick={() =>
+                                            openCustomerDetails(customer.id)
+                                        }
                                         className="cursor-pointer transition hover:bg-slate-50"
                                     >
                                         <td className="px-5 py-4 font-semibold">
                                             {customer.name}
                                         </td>
-
-                                        <td
-                                            className="px-5 py-4 text-slate-600"
-                                            dir="ltr"
-                                        >
-                                            {customer.phone}
+                                        <td className="px-5 py-4 text-slate-600" dir="ltr">
+                                            {customer.phone || "—"}
                                         </td>
-
-                                        <td className="px-5 py-4">
-                                            <span
-                                                className={[
-                                                    "font-semibold",
-                                                    customer.balance > 0
-                                                        ? "text-red-700"
-                                                        : customer.balance < 0
-                                                            ? "text-emerald-700"
-                                                            : "text-slate-500",
-                                                ].join(" ")}
-                                            >
-                                                {formatCustomerBalance(customer.balance)}
-                                            </span>
+                                        <BalanceCell
+                                            amount={selectedBalance}
+                                            currency={selectedCurrency}
+                                        />
+                                        <td className="px-5 py-4 text-slate-600">
+                                            {customer.lastPaymentAt
+                                                ? new Date(
+                                                      customer.lastPaymentAt,
+                                                  ).toLocaleDateString("ar-IQ")
+                                                : "لا توجد دفعات"}
                                         </td>
-
                                         <td className="px-5 py-4">
-                                            <div
-                                                className={[
-                                                    "inline-flex items-center gap-2 rounded-xl px-3 py-2",
-                                                    paymentStatus.className,
-                                                ].join(" ")}
-                                            >
-                                                <StatusIcon size={17} />
-
-                                                <div>
-                                                    <p className="text-xs font-semibold">
-                                                        {paymentStatus.label}
-                                                    </p>
-
-                                                    <p className="mt-0.5 text-xs opacity-80">
-                                                        {paymentStatus.description}
-                                                    </p>
-                                                </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                <span
+                                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}
+                                                >
+                                                    {status.label}
+                                                </span>
+                                                {overdue && (
+                                                    <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                                        متأخر
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <div className="flex gap-1">
+                                                <ActionButton
+                                                    label="عرض التفاصيل"
+                                                    onClick={() =>
+                                                        openCustomerDetails(
+                                                            customer.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <Eye size={18} />
+                                                </ActionButton>
+                                                <ActionButton
+                                                    label="تعديل العميل"
+                                                    onClick={() =>
+                                                        openEditCustomerDialog(
+                                                            customer,
+                                                        )
+                                                    }
+                                                    className="text-blue-600 hover:bg-blue-50"
+                                                >
+                                                    <Pencil size={18} />
+                                                </ActionButton>
+                                                <ActionButton
+                                                    label="حذف العميل"
+                                                    onClick={() =>
+                                                        requestCustomerDeletion(
+                                                            customer,
+                                                        )
+                                                    }
+                                                    className="text-red-600 hover:bg-red-50"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </ActionButton>
                                             </div>
                                         </td>
                                     </tr>
@@ -387,17 +553,707 @@ function CustomersPage() {
 
                 {filteredCustomers.length === 0 && (
                     <div className="px-5 py-16 text-center">
-                        <p className="font-semibold">
-                            لا يوجد عميل مطابق
-                        </p>
-
+                        <p className="font-semibold">لا يوجد عميل مطابق</p>
                         <p className="mt-1 text-sm text-slate-500">
                             جرّب البحث باسم أو رقم هاتف مختلف.
                         </p>
                     </div>
                 )}
             </div>
+
+            {isCustomerDialogOpen && (
+                <CustomerFormDialog
+                    isEditing={customerToEdit !== null}
+                    name={customerName}
+                    phone={customerPhone}
+                    address={customerAddress}
+                    notes={customerNotes}
+                    error={customerFormError}
+                    onNameChange={setCustomerName}
+                    onPhoneChange={setCustomerPhone}
+                    onAddressChange={setCustomerAddress}
+                    onNotesChange={setCustomerNotes}
+                    clearError={() => setCustomerFormError("")}
+                    onClose={closeCustomerDialog}
+                    onSubmit={handleCustomerSubmit}
+                />
+            )}
+
+            {selectedCustomer && (
+                <CustomerDetailsDialog
+                    customer={selectedCustomer}
+                    balance={getCustomerBalance(selectedCustomer.id)}
+                    transactions={transactions.filter(
+                        (transaction) =>
+                            transaction.customerId === selectedCustomer.id,
+                    )}
+                    selectedCurrency={detailsCurrency}
+                    onCurrencyChange={setDetailsCurrency}
+                    onClose={() => setSelectedCustomerId(null)}
+                    onAddTransaction={openTransactionDialog}
+                    onEdit={() => {
+                        setSelectedCustomerId(null);
+                        openEditCustomerDialog(selectedCustomer);
+                    }}
+                />
+            )}
+
+            {isTransactionDialogOpen &&
+                selectedCustomer &&
+                createPortal(
+                    <TransactionDialog
+                        customerName={selectedCustomer.name}
+                        type={transactionType}
+                        amount={transactionAmount}
+                        currency={transactionCurrency}
+                        note={transactionNote}
+                        error={transactionError}
+                        onTypeChange={setTransactionType}
+                        onAmountChange={setTransactionAmount}
+                        onCurrencyChange={setTransactionCurrency}
+                        onNoteChange={setTransactionNote}
+                        clearError={() => setTransactionError("")}
+                        onClose={closeTransactionDialog}
+                        onSubmit={handleTransactionSubmit}
+                    />,
+                    document.body,
+                )}
+
+            {customerToDelete && (
+                <ConfirmationDialog
+                    customerName={customerToDelete.name}
+                    onClose={() => setCustomerToDelete(null)}
+                    onConfirm={handleCustomerDeletion}
+                />
+            )}
         </section>
+    );
+}
+
+type SummaryCardProps = {
+    label: string;
+    value: string;
+    unit?: string;
+    icon: ReactNode;
+    iconClassName: string;
+};
+
+function SummaryCard({
+    label,
+    value,
+    unit,
+    icon,
+    iconClassName,
+}: SummaryCardProps) {
+    return (
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <p className="text-sm text-slate-500">{label}</p>
+                    <p className="mt-2 text-2xl font-bold">{value}</p>
+                    {unit && (
+                        <p className="mt-1 text-sm text-slate-500">{unit}</p>
+                    )}
+                </div>
+                <div className={`rounded-xl p-3 ${iconClassName}`}>
+                    {icon}
+                </div>
+            </div>
+        </article>
+    );
+}
+
+function CurrencySegmentedControl({
+    value,
+    onChange,
+    ariaLabel,
+}: {
+    value: Currency;
+    onChange: (currency: Currency) => void;
+    ariaLabel: string;
+}) {
+    const options: { value: Currency; label: string }[] = [
+        { value: "IQD", label: "الدينار العراقي" },
+        { value: "USD", label: "الدولار الأمريكي" },
+    ];
+
+    return (
+        <div
+            role="group"
+            aria-label={ariaLabel}
+            className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1"
+        >
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(option.value)}
+                    aria-pressed={value === option.value}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                        value === option.value
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-500 hover:text-slate-800"
+                    }`}
+                >
+                    {option.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+function BalanceCell({
+    amount,
+    currency,
+}: {
+    amount: number;
+    currency: Currency;
+}) {
+    return (
+        <td
+            className={`px-5 py-4 font-semibold ${
+                amount > 0
+                    ? "text-red-700"
+                    : amount < 0
+                      ? "text-blue-700"
+                      : "text-slate-500"
+            }`}
+        >
+            {amount === 0 ? "—" : formatBalance(amount, currency)}
+        </td>
+    );
+}
+
+type ActionButtonProps = {
+    label: string;
+    onClick: () => void;
+    children: ReactNode;
+    className?: string;
+};
+
+function ActionButton({
+    label,
+    onClick,
+    children,
+    className = "text-slate-600 hover:bg-slate-100",
+}: ActionButtonProps) {
+    return (
+        <button
+            type="button"
+            onClick={(event) => {
+                event.stopPropagation();
+                onClick();
+            }}
+            aria-label={label}
+            title={label}
+            className={`rounded-lg p-2 transition ${className}`}
+        >
+            {children}
+        </button>
+    );
+}
+
+type CustomerFormDialogProps = {
+    isEditing: boolean;
+    name: string;
+    phone: string;
+    address: string;
+    notes: string;
+    error: string;
+    onNameChange: (value: string) => void;
+    onPhoneChange: (value: string) => void;
+    onAddressChange: (value: string) => void;
+    onNotesChange: (value: string) => void;
+    clearError: () => void;
+    onClose: () => void;
+    onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+function CustomerFormDialog(props: CustomerFormDialogProps) {
+    return (
+        <ModalShell
+            title={props.isEditing ? "تعديل العميل" : "إضافة عميل"}
+            description="أدخل بيانات العميل الأساسية."
+            onClose={props.onClose}
+        >
+            <form onSubmit={props.onSubmit} className="p-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField label="اسم العميل" className="sm:col-span-2">
+                        <input
+                            type="text"
+                            value={props.name}
+                            onChange={(event) => {
+                                props.onNameChange(event.target.value);
+                                props.clearError();
+                            }}
+                            autoFocus
+                            className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+                        />
+                    </FormField>
+                    <FormField label="رقم الهاتف">
+                        <input
+                            type="tel"
+                            value={props.phone}
+                            onChange={(event) => {
+                                props.onPhoneChange(event.target.value);
+                                props.clearError();
+                            }}
+                            dir="ltr"
+                            className="rounded-xl border border-slate-200 px-4 py-3 text-right text-sm outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+                        />
+                    </FormField>
+                    <FormField label="العنوان">
+                        <input
+                            type="text"
+                            value={props.address}
+                            onChange={(event) => {
+                                props.onAddressChange(event.target.value);
+                                props.clearError();
+                            }}
+                            className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+                        />
+                    </FormField>
+                    <FormField label="ملاحظات" className="sm:col-span-2">
+                        <textarea
+                            value={props.notes}
+                            onChange={(event) => {
+                                props.onNotesChange(event.target.value);
+                                props.clearError();
+                            }}
+                            rows={3}
+                            className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
+                        />
+                    </FormField>
+                </div>
+                <DialogError error={props.error} />
+                <DialogActions onClose={props.onClose} submitLabel="حفظ العميل" />
+            </form>
+        </ModalShell>
+    );
+}
+
+type CustomerDetailsDialogProps = {
+    customer: Customer;
+    balance: CustomerBalance;
+    transactions: CustomerTransaction[];
+    selectedCurrency: Currency;
+    onCurrencyChange: (currency: Currency) => void;
+    onClose: () => void;
+    onAddTransaction: () => void;
+    onEdit: () => void;
+};
+
+function CustomerDetailsDialog({
+    customer,
+    balance,
+    transactions,
+    selectedCurrency,
+    onCurrencyChange,
+    onClose,
+    onAddTransaction,
+    onEdit,
+}: CustomerDetailsDialogProps) {
+    const historyRows = filterTransactionsByCurrency(
+        recalculateCustomerTransactionHistory(
+            transactions,
+            customer.id,
+        ),
+        selectedCurrency,
+    ).toSorted(
+            (first, second) =>
+                Date.parse(second.createdAt) -
+                    Date.parse(first.createdAt) ||
+                second.id - first.id,
+        );
+    const selectedBalance = balance[selectedCurrency];
+    const status = getBalanceStatus(selectedBalance);
+
+    return (
+        <ModalShell
+            title={customer.name}
+            description="تفاصيل العميل والحركات المالية."
+            onClose={onClose}
+            maxWidth="max-w-5xl"
+        >
+            <div className="p-5">
+                <div className="mb-5 flex justify-start">
+                    <CurrencySegmentedControl
+                        value={selectedCurrency}
+                        onChange={onCurrencyChange}
+                        ariaLabel="عملة عرض تفاصيل العميل"
+                    />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <InfoBox label="رقم الهاتف" value={customer.phone || "—"} />
+                    <InfoBox label="العنوان" value={customer.address || "—"} />
+                    <div className="rounded-xl bg-slate-50 p-4">
+                        <p className="text-xs text-slate-500">
+                            صافي الحساب {selectedCurrency}
+                        </p>
+                        <p
+                            className={`mt-2 text-xl font-bold ${
+                                selectedBalance > 0
+                                    ? "text-red-700"
+                                    : selectedBalance < 0
+                                      ? "text-blue-700"
+                                      : "text-slate-600"
+                            }`}
+                        >
+                            {formatBalance(
+                                selectedBalance,
+                                selectedCurrency,
+                            )}
+                        </p>
+                        <span
+                            className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${status.className}`}
+                        >
+                            {status.label}
+                        </span>
+                    </div>
+                </div>
+                {customer.notes && (
+                    <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                        {customer.notes}
+                    </div>
+                )}
+
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                    <h5 className="font-bold">الحركات المالية</h5>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={onEdit}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-100"
+                        >
+                            <Pencil size={17} /> تعديل البيانات
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onAddTransaction}
+                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+                        >
+                            <Plus size={17} /> إضافة حركة
+                        </button>
+                    </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full min-w-[900px] text-right text-sm">
+                        <thead className="bg-slate-50 text-slate-600">
+                            <tr>
+                                <th className="px-4 py-3">التاريخ</th>
+                                <th className="px-4 py-3">النوع</th>
+                                <th className="px-4 py-3">المبلغ</th>
+                                <th className="px-4 py-3">العملة</th>
+                                <th className="px-4 py-3">الملاحظة</th>
+                                <th className="px-4 py-3">الرصيد بعد الحركة</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {historyRows.map((transaction) => {
+                                return (
+                                    <tr key={transaction.id}>
+                                        <td className="whitespace-nowrap px-4 py-3">
+                                            {new Date(
+                                                transaction.createdAt,
+                                            ).toLocaleString("ar-IQ", {
+                                                dateStyle: "medium",
+                                                timeStyle: "short",
+                                            })}
+                                        </td>
+                                        <td className="px-4 py-3 font-medium">
+                                            {transactionTypeLabels[transaction.type]}
+                                        </td>
+                                        <td className="px-4 py-3 font-semibold">
+                                            {formatBalance(
+                                                transaction.amount,
+                                                selectedCurrency,
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3">{transaction.currency}</td>
+                                        <td className="max-w-xs px-4 py-3 text-slate-600">
+                                            {transaction.note || "—"}
+                                        </td>
+                                        <td className="px-4 py-3 font-semibold">
+                                            {formatBalance(
+                                                transaction.balanceAfter[
+                                                    transaction.currency
+                                                ],
+                                                transaction.currency,
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {historyRows.length === 0 && (
+                        <div className="p-10 text-center text-sm text-slate-500">
+                            لا توجد حركات مالية لهذا العميل بعملة{" "}
+                            {selectedCurrency}.
+                        </div>
+                    )}
+                </div>
+            </div>
+        </ModalShell>
+    );
+}
+
+type TransactionDialogProps = {
+    customerName: string;
+    type: CustomerTransactionType;
+    amount: string;
+    currency: Currency;
+    note: string;
+    error: string;
+    onTypeChange: (value: CustomerTransactionType) => void;
+    onAmountChange: (value: string) => void;
+    onCurrencyChange: (value: Currency) => void;
+    onNoteChange: (value: string) => void;
+    clearError: () => void;
+    onClose: () => void;
+    onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+function TransactionDialog(props: TransactionDialogProps) {
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <button
+                type="button"
+                onClick={props.onClose}
+                aria-label="إغلاق نافذة الحركة"
+                className="fixed inset-0 z-[100] bg-slate-950/70"
+            />
+            <div
+                className="relative z-[101] w-full max-w-xl rounded-2xl bg-white shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="flex items-center justify-between border-b border-slate-200 p-5">
+                    <div>
+                        <h4 className="text-lg font-bold">إضافة حركة مالية</h4>
+                        <p className="mt-1 text-sm text-slate-500">{props.customerName}</p>
+                    </div>
+                    <button type="button" onClick={props.onClose} aria-label="إغلاق">
+                        <X size={20} />
+                    </button>
+                </div>
+                <form onSubmit={props.onSubmit} className="p-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                        <FormField label="نوع الحركة">
+                            <select
+                                value={props.type}
+                                onChange={(event) => {
+                                    props.onTypeChange(
+                                        event.target.value as CustomerTransactionType,
+                                    );
+                                    props.clearError();
+                                }}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            >
+                                {Object.entries(transactionTypeLabels).map(
+                                    ([value, label]) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                        </FormField>
+                        <FormField label="العملة">
+                            <select
+                                value={props.currency}
+                                onChange={(event) => {
+                                    props.onCurrencyChange(
+                                        event.target.value as Currency,
+                                    );
+                                    props.clearError();
+                                }}
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            >
+                                <option value="IQD">IQD</option>
+                                <option value="USD">USD</option>
+                            </select>
+                        </FormField>
+                        <FormField label="المبلغ" className="sm:col-span-2">
+                            <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={props.amount}
+                                onChange={(event) => {
+                                    props.onAmountChange(event.target.value);
+                                    props.clearError();
+                                }}
+                                autoFocus
+                                className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            />
+                        </FormField>
+                        <FormField label="ملاحظة" className="sm:col-span-2">
+                            <textarea
+                                value={props.note}
+                                onChange={(event) => {
+                                    props.onNoteChange(event.target.value);
+                                    props.clearError();
+                                }}
+                                rows={3}
+                                className="resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
+                            />
+                        </FormField>
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-slate-500">
+                        التصحيح يزيد الرصيد المستحق للمعرض. استخدم دين للعميل لتخفيض الرصيد.
+                    </p>
+                    <DialogError error={props.error} />
+                    <DialogActions onClose={props.onClose} submitLabel="حفظ الحركة" />
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function ConfirmationDialog({
+    customerName,
+    onClose,
+    onConfirm,
+}: {
+    customerName: string;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <ModalShell title="حذف العميل" onClose={onClose} maxWidth="max-w-md">
+            <div className="p-5">
+                <p className="text-sm text-slate-600">
+                    هل أنت متأكد من حذف <strong>{customerName}</strong>؟
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
+                    >
+                        إلغاء
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                        تأكيد الحذف
+                    </button>
+                </div>
+            </div>
+        </ModalShell>
+    );
+}
+
+function ModalShell({
+    title,
+    description,
+    onClose,
+    maxWidth = "max-w-2xl",
+    children,
+}: {
+    title: string;
+    description?: string;
+    onClose: () => void;
+    maxWidth?: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <button
+                type="button"
+                onClick={onClose}
+                aria-label="إغلاق النافذة"
+                className="absolute inset-0 bg-slate-950/50"
+            />
+            <div
+                role="dialog"
+                aria-modal="true"
+                className={`relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white shadow-xl ${maxWidth}`}
+            >
+                <div className="flex items-center justify-between border-b border-slate-200 p-5">
+                    <div>
+                        <h4 className="text-lg font-bold">{title}</h4>
+                        {description && (
+                            <p className="mt-1 text-sm text-slate-500">
+                                {description}
+                            </p>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="إغلاق"
+                        className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function FormField({
+    label,
+    className = "",
+    children,
+}: {
+    label: string;
+    className?: string;
+    children: ReactNode;
+}) {
+    return (
+        <label className={`grid gap-2 ${className}`}>
+            <span className="text-sm font-semibold">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+function DialogError({ error }: { error: string }) {
+    return error ? (
+        <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {error}
+        </p>
+    ) : null;
+}
+
+function DialogActions({
+    onClose,
+    submitLabel,
+}: {
+    onClose: () => void;
+    submitLabel: string;
+}) {
+    return (
+        <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-5">
+            <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold hover:bg-slate-100"
+            >
+                إلغاء
+            </button>
+            <button
+                type="submit"
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+                {submitLabel}
+            </button>
+        </div>
+    );
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className="mt-2 font-semibold">{value}</p>
+        </div>
     );
 }
 
