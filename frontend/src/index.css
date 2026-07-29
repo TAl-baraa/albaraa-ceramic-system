@@ -26,3 +26,193 @@ textarea,
 select {
   font: inherit;
 }
+
+.printable-sale-invoice {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
+  :root,
+  body {
+    color: #000;
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .app-sidebar,
+  .app-header,
+  .app-navigation,
+  .invoice-screen-action,
+  button {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .printable-sale-invoice,
+  .printable-sale-invoice * {
+    visibility: visible !important;
+  }
+
+  .printable-sale-invoice {
+    position: absolute;
+    inset: 0;
+    display: block !important;
+    width: 100%;
+    min-height: 100%;
+    color: #000;
+    background: #fff;
+    font-family: Tahoma, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.45;
+  }
+
+  .print-invoice-header {
+    display: flex !important;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20mm;
+    border-bottom: 2px solid #000;
+    padding-bottom: 5mm;
+  }
+
+  .print-invoice-header h1 {
+    margin: 0;
+    font-size: 20pt;
+  }
+
+  .print-invoice-kind {
+    margin: 2mm 0 0;
+    font-size: 13pt;
+    font-weight: 700;
+  }
+
+  .print-invoice-number {
+    display: grid !important;
+    gap: 1mm;
+    text-align: left;
+  }
+
+  .print-invoice-number span,
+  .print-customer-grid span {
+    font-size: 8.5pt;
+    color: #444;
+  }
+
+  .print-invoice-number strong {
+    font-size: 12pt;
+  }
+
+  .print-customer-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4mm 8mm;
+    margin: 6mm 0;
+    border: 1px solid #aaa;
+    padding: 4mm;
+  }
+
+  .print-customer-grid > div {
+    display: grid !important;
+    gap: 1mm;
+  }
+
+  .print-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
+    direction: rtl;
+  }
+
+  .print-items-table th,
+  .print-items-table td {
+    border: 1px solid #777;
+    padding: 2.5mm 2mm;
+    text-align: right;
+    vertical-align: top;
+  }
+
+  .print-items-table th {
+    background: #eee !important;
+    font-weight: 700;
+  }
+
+  .print-items-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-summary {
+    width: 82mm;
+    margin-top: 6mm;
+    margin-right: auto;
+    border: 1px solid #777;
+  }
+
+  .print-summary > div {
+    display: flex !important;
+    justify-content: space-between;
+    gap: 8mm;
+    border-bottom: 1px solid #bbb;
+    padding: 2.5mm 3mm;
+  }
+
+  .print-summary > div:last-child {
+    border-bottom: 0;
+  }
+
+  .print-amount-strong {
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  .print-notes {
+    margin-top: 7mm;
+    border-top: 1px solid #999;
+    padding-top: 4mm;
+    break-inside: avoid;
+  }
+
+  .print-notes h2 {
+    margin: 0 0 2mm;
+    font-size: 11pt;
+  }
+
+  .print-notes p {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .print-signatures {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 30mm;
+    margin-top: 18mm;
+    text-align: center;
+    break-inside: avoid;
+  }
+
+  .print-signatures > div > div {
+    margin-top: 12mm;
+    border-top: 1px solid #000;
+  }
+
+  .printable-sale-invoice footer {
+    margin-top: 12mm;
+    border-top: 1px solid #aaa;
+    padding-top: 4mm;
+    text-align: center;
+    font-weight: 700;
+    break-inside: avoid;
+  }
+}

@@ -1,4 +1,9 @@
-import { ArrowRight, Check, Pencil } from "lucide-react";
+import {
+    ArrowRight,
+    Check,
+    Pencil,
+    Printer,
+} from "lucide-react";
 import { useState } from "react";
 import {
     useNavigate,
@@ -7,8 +12,14 @@ import {
 } from "react-router-dom";
 
 import { useSales } from "../context/SalesContext";
-import type { Currency } from "../types/customer";
+import PrintableSaleInvoice from "../components/sales/PrintableSaleInvoice";
+import { useCustomers } from "../context/CustomersContext";
 import type { SaleInvoiceStatus } from "../types/sale";
+import {
+    formatSaleMoney,
+    getPaymentExplanation,
+    getRemainingPresentation,
+} from "../utils/salePresentation";
 import {
     FinalizeInvoiceDialog,
     SaleInvoiceEditor,
@@ -26,17 +37,6 @@ const statusClasses: Record<SaleInvoiceStatus, string> = {
     cancelled: "bg-slate-100 text-slate-600",
 };
 
-function formatMoney(amount: number, currency: Currency) {
-    return currency === "USD"
-        ? `USD ${amount.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          })}`
-        : `${amount.toLocaleString("ar-IQ", {
-              maximumFractionDigits: 0,
-          })} د.ع`;
-}
-
 function SaleDetailsPage() {
     const navigate = useNavigate();
     const { invoiceId } = useParams();
@@ -46,9 +46,11 @@ function SaleDetailsPage() {
         getItemsByInvoiceId,
         completeDraftInvoice,
     } = useSales();
+    const { customers } = useCustomers();
     const [showFinalizeConfirmation, setShowFinalizeConfirmation] =
         useState(false);
     const [completionError, setCompletionError] = useState("");
+    const [printError, setPrintError] = useState("");
     const numericInvoiceId = Number(invoiceId);
     const invoice = Number.isFinite(numericInvoiceId)
         ? getInvoiceById(numericInvoiceId)
@@ -88,6 +90,29 @@ function SaleDetailsPage() {
         });
     }
 
+    function printInvoice() {
+        const hasMalformedItem = items.some(
+            (item) =>
+                !item.productCodeSnapshot ||
+                !item.productNameSnapshot ||
+                !Number.isFinite(item.quantity) ||
+                item.quantity <= 0 ||
+                !Number.isFinite(item.unitPrice) ||
+                item.unitPrice <= 0 ||
+                !Number.isFinite(item.total),
+        );
+
+        if (items.length === 0 || hasMalformedItem) {
+            setPrintError(
+                "لا يمكن طباعة فاتورة دون منتجات صالحة.",
+            );
+            return;
+        }
+
+        setPrintError("");
+        window.print();
+    }
+
     return (
         <section className="mx-auto max-w-6xl">
             <button
@@ -120,6 +145,11 @@ function SaleDetailsPage() {
                     {completionError && (
                         <div className="whitespace-pre-line rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                             {completionError}
+                        </div>
+                    )}
+                    {printError && (
+                        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                            {printError}
                         </div>
                     )}
 
@@ -166,6 +196,18 @@ function SaleDetailsPage() {
                                         </button>
                                     </>
                                 )}
+                                {(invoice.status === "completed" ||
+                                    invoice.status === "cancelled") && (
+                                    <button
+                                        type="button"
+                                        onClick={printInvoice}
+                                        aria-label="طباعة الفاتورة"
+                                        className="invoice-screen-action inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+                                    >
+                                        <Printer size={17} />
+                                        طباعة الفاتورة
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -200,10 +242,47 @@ function SaleDetailsPage() {
                         </div>
 
                         {invoice.status === "completed" && (
-                            <p className="mt-5 rounded-xl bg-blue-50 px-4 py-4 text-sm font-semibold text-blue-700">
-                                تم ترحيل هذه الفاتورة إلى المخزون وحساب
-                                العميل.
-                            </p>
+                            <>
+                                <p className="mt-5 rounded-xl bg-blue-50 px-4 py-4 text-sm font-semibold text-blue-700">
+                                    تم ترحيل هذه الفاتورة إلى المخزون
+                                    وحساب العميل.
+                                </p>
+                                <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                                    <h4 className="font-bold">
+                                        حالة الدفع والحساب
+                                    </h4>
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        {getPaymentExplanation(invoice)}
+                                    </p>
+                                </div>
+                                <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-3">
+                                    <DetailCard
+                                        label="حركات المخزون"
+                                        value={`تم إنشاء ${invoice.stockMovementIds.length.toLocaleString("ar-IQ")} حركات مخزون`}
+                                    />
+                                    <DetailCard
+                                        label="الحركة المالية"
+                                        value={
+                                            invoice.completionTransactionId !==
+                                            null
+                                                ? "تم إنشاء حركة مالية مرتبطة بالفاتورة"
+                                                : "لم تُنشأ حركة مالية"
+                                        }
+                                    />
+                                    <DetailCard
+                                        label="وقت الاعتماد"
+                                        value={
+                                            invoice.completedAt
+                                                ? new Date(
+                                                      invoice.completedAt,
+                                                  ).toLocaleString(
+                                                      "ar-IQ",
+                                                  )
+                                                : "—"
+                                        }
+                                    />
+                                </div>
+                            </>
                         )}
                     </div>
 
@@ -217,6 +296,9 @@ function SaleDetailsPage() {
                             <table className="w-full min-w-[900px] text-right text-sm">
                                 <thead className="bg-slate-50 text-slate-600">
                                     <tr>
+                                        <th className="px-4 py-3">
+                                            التسلسل
+                                        </th>
                                         <th className="px-4 py-3">
                                             الكود
                                         </th>
@@ -238,8 +320,13 @@ function SaleDetailsPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {items.map((item) => (
+                                    {items.map((item, index) => (
                                         <tr key={item.id}>
+                                            <td className="px-4 py-4">
+                                                {(index + 1).toLocaleString(
+                                                    "ar-IQ",
+                                                )}
+                                            </td>
                                             <td className="px-4 py-4 font-semibold" dir="ltr">
                                                 {
                                                     item.productCodeSnapshot
@@ -259,13 +346,13 @@ function SaleDetailsPage() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-4">
-                                                {formatMoney(
+                                                {formatSaleMoney(
                                                     item.unitPrice,
                                                     invoice.currency,
                                                 )}
                                             </td>
                                             <td className="px-4 py-4 font-bold">
-                                                {formatMoney(
+                                                {formatSaleMoney(
                                                     item.total,
                                                     invoice.currency,
                                                 )}
@@ -287,21 +374,21 @@ function SaleDetailsPage() {
                         <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                             <AmountRow
                                 label="المجموع الفرعي"
-                                value={formatMoney(
+                                value={formatSaleMoney(
                                     invoice.subtotal,
                                     invoice.currency,
                                 )}
                             />
                             <AmountRow
                                 label="الخصم"
-                                value={formatMoney(
+                                value={formatSaleMoney(
                                     invoice.discount,
                                     invoice.currency,
                                 )}
                             />
                             <AmountRow
-                                label="الإجمالي"
-                                value={formatMoney(
+                                label="الإجمالي النهائي"
+                                value={formatSaleMoney(
                                     invoice.total,
                                     invoice.currency,
                                 )}
@@ -309,28 +396,37 @@ function SaleDetailsPage() {
                             />
                             <AmountRow
                                 label="المدفوع"
-                                value={formatMoney(
+                                value={formatSaleMoney(
                                     invoice.paidAmount,
                                     invoice.currency,
                                 )}
                             />
                             <AmountRow
                                 label={
-                                    invoice.remainingAmount < 0
-                                        ? "المبلغ الزائد"
-                                        : "المتبقي"
-                                }
-                                value={formatMoney(
-                                    Math.abs(
+                                    getRemainingPresentation(
                                         invoice.remainingAmount,
-                                    ),
-                                    invoice.currency,
-                                )}
+                                        invoice.currency,
+                                    ).label
+                                }
+                                value={
+                                    getRemainingPresentation(
+                                        invoice.remainingAmount,
+                                        invoice.currency,
+                                    ).value
+                                }
                                 strong
                             />
                         </div>
                     </div>
                 </div>
+            )}
+
+            {invoice && (
+                <PrintableSaleInvoice
+                    invoice={invoice}
+                    items={items}
+                    customers={customers}
+                />
             )}
 
             {invoice &&

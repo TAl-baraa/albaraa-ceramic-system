@@ -87,7 +87,7 @@ function AdminLayout() {
             <div className="flex min-h-screen">
                 <aside
                     className={[
-                        "fixed inset-y-0 right-0 z-40 w-72 border-l border-slate-200 bg-white transition-transform duration-300 lg:static lg:translate-x-0",
+                        "app-sidebar fixed inset-y-0 right-0 z-40 w-72 border-l border-slate-200 bg-white transition-transform duration-300 lg:static lg:translate-x-0",
                         sidebarOpen ? "translate-x-0" : "translate-x-full",
                     ].join(" ")}
                 >
@@ -102,7 +102,7 @@ function AdminLayout() {
                         </div>
                     </div>
 
-                    <nav className="space-y-2 p-4">
+                    <nav className="app-navigation space-y-2 p-4">
                         {menuItems.map((item) => {
                             const Icon = item.icon;
 
@@ -138,7 +138,7 @@ function AdminLayout() {
                 )}
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
+                    <header className="app-header flex h-20 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
                         <div className="flex items-center gap-3">
                             <button
                                 type="button"
