@@ -13,6 +13,7 @@ export type EditableCustomerTransactionType = Exclude<
 >;
 
 export type CustomerTransactionStatus = "active" | "voided";
+export type TransactionSourceType = "manual" | "sale_invoice";
 
 export type Customer = {
     id: number;
@@ -39,6 +40,9 @@ export type CustomerTransaction = {
     voidedAt: string | null;
     voidReason: string;
     createdByCorrection: boolean;
+    sourceType: TransactionSourceType;
+    sourceId: number | null;
+    sourceReference: string;
 };
 
 export type CustomerBalance = Record<Currency, number>;

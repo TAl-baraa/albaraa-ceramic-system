@@ -19,6 +19,9 @@ export const initialSaleInvoices: SaleInvoice[] = [
         note: "تجهيز سيراميك أرضيات.",
         createdAt: "2026-07-20T09:30:00.000Z",
         updatedAt: "2026-07-20T10:15:00.000Z",
+        completedAt: "2026-07-20T10:15:00.000Z",
+        completionTransactionId: null,
+        stockMovementIds: [],
     },
     {
         id: 1002,
@@ -35,6 +38,9 @@ export const initialSaleInvoices: SaleInvoice[] = [
         note: "بانتظار تأكيد الكميات.",
         createdAt: "2026-07-24T12:00:00.000Z",
         updatedAt: "2026-07-24T12:00:00.000Z",
+        completedAt: null,
+        completionTransactionId: null,
+        stockMovementIds: [],
     },
     {
         id: 1003,
@@ -51,6 +57,9 @@ export const initialSaleInvoices: SaleInvoice[] = [
         note: "فاتورة مواد مستوردة.",
         createdAt: "2026-07-26T08:45:00.000Z",
         updatedAt: "2026-07-26T09:10:00.000Z",
+        completedAt: "2026-07-26T09:10:00.000Z",
+        completionTransactionId: null,
+        stockMovementIds: [],
     },
 ];
 

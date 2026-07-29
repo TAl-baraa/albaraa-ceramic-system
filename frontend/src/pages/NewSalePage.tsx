@@ -106,6 +106,7 @@ export function SaleInvoiceEditor({
         getInvoiceById,
         getItemsByInvoiceId,
         saveDraftInvoice,
+        completeDraftInvoice,
     } = useSales();
     const existingInvoice =
         invoiceId === undefined
@@ -167,6 +168,8 @@ export function SaleInvoiceEditor({
         useState(false);
     const [pendingCurrency, setPendingCurrency] =
         useState<Currency | null>(null);
+    const [showFinalizeConfirmation, setShowFinalizeConfirmation] =
+        useState(false);
 
     const currentSignature = JSON.stringify({
         dateValue,
@@ -581,6 +584,9 @@ export function SaleInvoiceEditor({
             note: note.trim(),
             createdAt: new Date(dateValue).toISOString(),
             updatedAt: now,
+            completedAt: null,
+            completionTransactionId: null,
+            stockMovementIds: [],
         };
         const savedItems: SaleInvoiceItem[] = items.map((item) => {
             const quantity = Number(item.quantityInput);
@@ -622,6 +628,40 @@ export function SaleInvoiceEditor({
         } else {
             navigate("/sales");
         }
+    }
+
+    function requestFinalization() {
+        if (isDirty) {
+            setFormError(
+                "احفظ تغييرات المسودة قبل اعتماد الفاتورة.",
+            );
+            return;
+        }
+
+        if (
+            !invoices.some(
+                (invoice) =>
+                    invoice.id === stableInvoiceId &&
+                    invoice.status === "draft",
+            )
+        ) {
+            setFormError("احفظ الفاتورة كمسودة قبل اعتمادها.");
+            return;
+        }
+
+        setShowFinalizeConfirmation(true);
+    }
+
+    function finalizeInvoice() {
+        const result = completeDraftInvoice(stableInvoiceId);
+
+        if (!result.success) {
+            setFormError(result.error);
+            setShowFinalizeConfirmation(false);
+            return;
+        }
+
+        navigate(`/sales/${stableInvoiceId}?completed=1`);
     }
 
     return (
@@ -1158,6 +1198,13 @@ export function SaleInvoiceEditor({
                         <Check size={17} />
                         حفظ والعودة للمبيعات
                     </button>
+                    <button
+                        type="button"
+                        onClick={requestFinalization}
+                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                    >
+                        اعتماد الفاتورة
+                    </button>
                 </div>
             </div>
 
@@ -1181,7 +1228,129 @@ export function SaleInvoiceEditor({
                     destructive
                 />
             )}
+
+            {showFinalizeConfirmation && (
+                <FinalizeInvoiceDialog
+                    invoiceNumber={stableInvoiceNumber}
+                    customerName={customerNameSnapshot}
+                    currency={currency}
+                    total={totals.total}
+                    paidAmount={totals.paidAmount}
+                    remainingAmount={totals.remainingAmount}
+                    itemCount={items.length}
+                    onClose={() =>
+                        setShowFinalizeConfirmation(false)
+                    }
+                    onConfirm={finalizeInvoice}
+                />
+            )}
         </section>
+    );
+}
+
+export function FinalizeInvoiceDialog({
+    invoiceNumber,
+    customerName,
+    currency,
+    total,
+    paidAmount,
+    remainingAmount,
+    itemCount,
+    onClose,
+    onConfirm,
+}: {
+    invoiceNumber: string;
+    customerName: string;
+    currency: Currency;
+    total: number;
+    paidAmount: number;
+    remainingAmount: number;
+    itemCount: number;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <button
+                type="button"
+                onClick={onClose}
+                className="fixed inset-0 bg-slate-950/70"
+                aria-label="إغلاق"
+            />
+            <div className="relative z-[111] w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h4 className="text-lg font-bold">
+                            اعتماد فاتورة البيع
+                        </h4>
+                        <p className="mt-1 text-sm text-slate-500" dir="ltr">
+                            {invoiceNumber}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="إغلاق"
+                    >
+                        <X size={19} />
+                    </button>
+                </div>
+                <div className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
+                    <TotalRow label="العميل" value={customerName} />
+                    <TotalRow label="العملة" value={currency} />
+                    <TotalRow
+                        label="الإجمالي"
+                        value={formatMoney(total, currency)}
+                    />
+                    <TotalRow
+                        label="المدفوع"
+                        value={formatMoney(paidAmount, currency)}
+                    />
+                    <TotalRow
+                        label={
+                            remainingAmount < 0
+                                ? "المبلغ الزائد"
+                                : "المتبقي"
+                        }
+                        value={formatMoney(
+                            Math.abs(remainingAmount),
+                            currency,
+                        )}
+                    />
+                    <TotalRow
+                        label="عدد المنتجات"
+                        value={itemCount.toLocaleString("ar-IQ")}
+                    />
+                </div>
+                {remainingAmount < 0 && (
+                    <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                        يوجد مبلغ زائد مدفوع على الفاتورة.
+                    </p>
+                )}
+                <div className="mt-4 space-y-2 text-sm leading-6 text-red-700">
+                    <p>سيتم خصم كميات المنتجات من المخزون.</p>
+                    <p>
+                        لا يمكن تعديل الفاتورة بعد اعتمادها.
+                    </p>
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
+                    >
+                        تراجع
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                        اعتماد الفاتورة
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

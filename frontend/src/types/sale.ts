@@ -21,6 +21,9 @@ export type SaleInvoice = {
     note: string;
     createdAt: string;
     updatedAt: string;
+    completedAt: string | null;
+    completionTransactionId: number | null;
+    stockMovementIds: number[];
 };
 
 export type SaleInvoiceItem = {

@@ -1,5 +1,6 @@
 import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
     AlertTriangle,
     ArrowDownUp,
@@ -730,6 +731,15 @@ function MovementHistoryRow({
             </td>
             <td className="max-w-xs px-5 py-4 text-slate-600">
                 {movement.note || "—"}
+                {movement.sourceType === "sale_invoice" &&
+                    movement.sourceId !== null && (
+                        <Link
+                            to={`/sales/${movement.sourceId}`}
+                            className="mt-1 block text-xs font-semibold text-blue-700 hover:underline"
+                        >
+                            فاتورة بيع {movement.sourceReference}
+                        </Link>
+                    )}
             </td>
         </tr>
     );

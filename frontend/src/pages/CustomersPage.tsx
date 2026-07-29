@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
     AlertTriangle,
     Eye,
@@ -1069,6 +1070,20 @@ function CustomerDetailsDialog({
                                         <td className="px-4 py-3">{transaction.currency}</td>
                                         <td className="max-w-xs px-4 py-3 text-slate-600">
                                             {transaction.note || "—"}
+                                            {transaction.sourceType ===
+                                                "sale_invoice" &&
+                                                transaction.sourceId !==
+                                                    null && (
+                                                    <Link
+                                                        to={`/sales/${transaction.sourceId}`}
+                                                        className="mt-1 block text-xs font-semibold text-blue-700 hover:underline"
+                                                    >
+                                                        فاتورة بيع{" "}
+                                                        {
+                                                            transaction.sourceReference
+                                                        }
+                                                    </Link>
+                                                )}
                                             {transaction.createdByCorrection && (
                                                 <p className="mt-1 text-xs text-blue-700">
                                                     بديلة عن حركة سابقة

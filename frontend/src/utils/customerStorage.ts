@@ -113,5 +113,16 @@ export function parseStoredCustomerTransaction(
             typeof value.createdByCorrection === "boolean"
                 ? value.createdByCorrection
                 : false,
+        sourceType:
+            value.sourceType === "sale_invoice"
+                ? "sale_invoice"
+                : "manual",
+        sourceId: isFiniteNonNegativeNumber(value.sourceId)
+            ? value.sourceId
+            : null,
+        sourceReference:
+            typeof value.sourceReference === "string"
+                ? value.sourceReference
+                : "",
     };
 }

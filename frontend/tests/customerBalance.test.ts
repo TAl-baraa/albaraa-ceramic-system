@@ -42,6 +42,9 @@ function transaction(
         voidedAt: null,
         voidReason: "",
         createdByCorrection: false,
+        sourceType: "manual",
+        sourceId: null,
+        sourceReference: "",
         ...overrides,
     };
 }

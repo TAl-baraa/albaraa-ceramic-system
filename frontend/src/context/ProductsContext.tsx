@@ -24,6 +24,10 @@ type ProductsContextValue = {
     addStockMovement: (
         movement: StockMovementInput,
     ) => AddStockMovementResult;
+    applySaleStockPlan: (
+        updatedProducts: Product[],
+        movements: StockMovement[],
+    ) => void;
 };
 
 type ProductsProviderProps = {
@@ -93,6 +97,17 @@ function parseStoredMovement(value: unknown): StockMovement | null {
         newQuantity: value.newQuantity,
         note: value.note,
         createdAt: value.createdAt,
+        sourceType:
+            value.sourceType === "sale_invoice"
+                ? "sale_invoice"
+                : "manual",
+        sourceId: isFiniteNonNegativeNumber(value.sourceId)
+            ? value.sourceId
+            : null,
+        sourceReference:
+            typeof value.sourceReference === "string"
+                ? value.sourceReference
+                : "",
     };
 }
 
@@ -318,6 +333,9 @@ export function ProductsProvider({
             newQuantity,
             note: input.note.trim(),
             createdAt,
+            sourceType: "manual",
+            sourceId: null,
+            sourceReference: "",
         };
 
         setProducts((currentProducts) =>
@@ -335,6 +353,29 @@ export function ProductsProvider({
         return { success: true };
     }
 
+    function applySaleStockPlan(
+        updatedProducts: Product[],
+        movements: StockMovement[],
+    ) {
+        const updatesById = new Map(
+            updatedProducts.map((product) => [product.id, product]),
+        );
+
+        setProducts((currentProducts) =>
+            currentProducts.map(
+                (product) => updatesById.get(product.id) ?? product,
+            ),
+        );
+        setStockMovements((currentMovements) =>
+            [...movements, ...currentMovements].toSorted(
+                (first, second) =>
+                    Date.parse(second.createdAt) -
+                        Date.parse(first.createdAt) ||
+                    second.id - first.id,
+            ),
+        );
+    }
+
     return (
         <ProductsContext.Provider
             value={{
@@ -344,6 +385,7 @@ export function ProductsProvider({
                 deleteProduct,
                 stockMovements,
                 addStockMovement,
+                applySaleStockPlan,
             }}
         >
             {children}

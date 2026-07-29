@@ -2,6 +2,7 @@ import {
     createContext,
     useContext,
     useEffect,
+    useRef,
     useState,
 } from "react";
 import type { ReactNode } from "react";
@@ -10,11 +11,14 @@ import {
     initialSaleInvoiceItems,
     initialSaleInvoices,
 } from "../data/initialSales";
+import { buildSaleCompletionPlan } from "../services/saleCompletion";
 import type {
     SaleInvoice,
     SaleInvoiceItem,
     SaleInvoiceStatus,
 } from "../types/sale";
+import { useCustomers } from "./CustomersContext";
+import { useProducts } from "./ProductsContext";
 
 const SALES_INVOICES_STORAGE_KEY =
     "albaraa-ceramic-sale-invoices";
@@ -41,6 +45,7 @@ type SalesContextValue = {
         items: SaleInvoiceItem[],
     ) => SalesActionResult;
     deleteDraftInvoice: (invoiceId: number) => SalesActionResult;
+    completeDraftInvoice: (invoiceId: number) => SalesActionResult;
     getInvoiceById: (invoiceId: number) => SaleInvoice | undefined;
     getItemsByInvoiceId: (invoiceId: number) => SaleInvoiceItem[];
 };
@@ -128,6 +133,20 @@ function parseInvoice(value: unknown): SaleInvoice | null {
         note: value.note,
         createdAt: value.createdAt,
         updatedAt: value.updatedAt,
+        completedAt: isDate(value.completedAt)
+            ? value.completedAt
+            : null,
+        completionTransactionId: isNonNegativeFiniteNumber(
+            value.completionTransactionId,
+        )
+            ? value.completionTransactionId
+            : null,
+        stockMovementIds: Array.isArray(value.stockMovementIds)
+            ? value.stockMovementIds.filter(
+                  (id): id is number =>
+                      isNonNegativeFiniteNumber(id),
+              )
+            : [],
     };
 }
 
@@ -194,6 +213,17 @@ function loadStoredArray<T>(
 }
 
 export function SalesProvider({ children }: { children: ReactNode }) {
+    const completionLocks = useRef(new Set<number>());
+    const {
+        products,
+        stockMovements,
+        applySaleStockPlan,
+    } = useProducts();
+    const {
+        customers,
+        transactions,
+        applySaleTransaction,
+    } = useCustomers();
     const [invoices, setInvoices] = useState<SaleInvoice[]>(() =>
         loadStoredArray(
             SALES_INVOICES_STORAGE_KEY,
@@ -402,6 +432,65 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         return invoices.find((invoice) => invoice.id === invoiceId);
     }
 
+    function completeDraftInvoice(
+        invoiceId: number,
+    ): SalesActionResult {
+        if (completionLocks.current.has(invoiceId)) {
+            return {
+                success: false,
+                error: "جاري اعتماد الفاتورة أو تم اعتمادها بالفعل.",
+            };
+        }
+
+        completionLocks.current.add(invoiceId);
+        const invoice = invoices.find(
+            (currentInvoice) =>
+                currentInvoice.id === invoiceId,
+        );
+        const items = invoiceItems.filter(
+            (item) => item.invoiceId === invoiceId,
+        );
+        const completion = buildSaleCompletionPlan({
+            invoice,
+            invoices,
+            items,
+            products,
+            customers,
+            stockMovements,
+            customerTransactions: transactions,
+            completedAt: new Date().toISOString(),
+        });
+
+        if (!completion.success) {
+            completionLocks.current.delete(invoiceId);
+            return {
+                success: false,
+                error: completion.error,
+            };
+        }
+
+        const { plan } = completion;
+
+        applySaleStockPlan(
+            plan.updatedProducts,
+            plan.stockMovements,
+        );
+
+        if (plan.customerTransaction) {
+            applySaleTransaction(plan.customerTransaction);
+        }
+
+        setInvoices((currentInvoices) =>
+            currentInvoices.map((currentInvoice) =>
+                currentInvoice.id === invoiceId
+                    ? plan.completedInvoice
+                    : currentInvoice,
+            ),
+        );
+
+        return { success: true };
+    }
+
     function getItemsByInvoiceId(invoiceId: number) {
         return invoiceItems.filter(
             (item) => item.invoiceId === invoiceId,
@@ -417,6 +506,7 @@ export function SalesProvider({ children }: { children: ReactNode }) {
                 updateInvoice,
                 saveDraftInvoice,
                 deleteDraftInvoice,
+                completeDraftInvoice,
                 getInvoiceById,
                 getItemsByInvoiceId,
             }}
