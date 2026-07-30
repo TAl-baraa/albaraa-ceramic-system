@@ -15,6 +15,11 @@ import type {
     Product,
     ProductUnit,
 } from "../types/product";
+import {
+    formatCurrency,
+    formatQuantity,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 
 function ProductsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -88,7 +93,7 @@ function ProductsPage() {
 
         setProductCode(product.code);
         setProductName(product.name);
-        setProductSize(product.size);
+        setProductSize(normalizeWesternDigits(product.size));
         setProductCompany(product.company);
         setProductUnit(product.unit);
         setQuantity(product.quantity.toString());
@@ -362,7 +367,7 @@ function ProductsPage() {
                                     </td>
 
                                     <td className="px-5 py-4 text-slate-600">
-                                        {product.size}
+                                        {normalizeWesternDigits(product.size)}
                                     </td>
 
                                     <td className="px-5 py-4 text-slate-600">
@@ -374,29 +379,23 @@ function ProductsPage() {
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
-                                        {product.quantity.toLocaleString(
-                                            "ar-IQ",
-                                        )}{" "}
+                                        {formatQuantity(product.quantity)}{" "}
                                         <span className="font-normal text-slate-500">
                                             {product.unit}
                                         </span>
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
-                                        {product.sellPriceIqd.toLocaleString(
-                                            "ar-IQ",
-                                        )}{" "}
-                                        د.ع
+                                        {formatCurrency(
+                                            product.sellPriceIqd,
+                                            "IQD",
+                                        )}
                                     </td>
 
                                     <td className="px-5 py-4 font-semibold">
-                                        $
-                                        {product.purchasePriceUsd.toLocaleString(
-                                            "en-US",
-                                            {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            },
+                                        {formatCurrency(
+                                            product.purchasePriceUsd,
+                                            "USD",
                                         )}
                                     </td>
 
@@ -534,7 +533,11 @@ function ProductsPage() {
                                         type="text"
                                         value={productSize}
                                         onChange={(event) => {
-                                            setProductSize(event.target.value);
+                                            setProductSize(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            );
                                             setFormError("");
                                         }}
                                         placeholder="مثال: 60×60"
@@ -589,13 +592,18 @@ function ProductsPage() {
 
                                     <input
                                         type="number"
+                                        lang="en"
                                         min="0"
                                         step={
                                             productUnit === "قطعة" ? "1" : "0.01"
                                         }
                                         value={quantity}
                                         onChange={(event) => {
-                                            setQuantity(event.target.value);
+                                            setQuantity(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            );
                                             setFormError("");
                                         }}
                                         className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none"
@@ -609,13 +617,18 @@ function ProductsPage() {
 
                                     <input
                                         type="number"
+                                        lang="en"
                                         min="0"
                                         step={
                                             productUnit === "قطعة" ? "1" : "0.01"
                                         }
                                         value={minimumQuantity}
                                         onChange={(event) => {
-                                            setMinimumQuantity(event.target.value);
+                                            setMinimumQuantity(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            );
                                             setFormError("");
                                         }}
                                         className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none"
@@ -629,11 +642,16 @@ function ProductsPage() {
 
                                     <input
                                         type="number"
+                                        lang="en"
                                         min="0"
                                         step="1"
                                         value={sellPriceIqd}
                                         onChange={(event) => {
-                                            setSellPriceIqd(event.target.value);
+                                            setSellPriceIqd(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            );
                                             setFormError("");
                                         }}
                                         className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none"
@@ -647,11 +665,16 @@ function ProductsPage() {
 
                                     <input
                                         type="number"
+                                        lang="en"
                                         min="0"
                                         step="0.01"
                                         value={purchasePriceUsd}
                                         onChange={(event) => {
-                                            setPurchasePriceUsd(event.target.value);
+                                            setPurchasePriceUsd(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            );
                                             setFormError("");
                                         }}
                                         className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none"

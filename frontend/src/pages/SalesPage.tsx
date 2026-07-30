@@ -19,6 +19,12 @@ import type {
     SaleInvoice,
     SaleInvoiceStatus,
 } from "../types/sale";
+import {
+    formatCurrency,
+    formatDate,
+    formatNumber,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 import { getSalesSummary } from "../utils/salePresentation";
 
 const statusLabels: Record<SaleInvoiceStatus, string> = {
@@ -36,16 +42,7 @@ const statusClasses: Record<SaleInvoiceStatus, string> = {
 type StatusFilter = "all" | SaleInvoiceStatus;
 
 function formatMoney(amount: number, currency: Currency) {
-    if (currency === "USD") {
-        return `USD ${amount.toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        })}`;
-    }
-
-    return `${amount.toLocaleString("ar-IQ", {
-        maximumFractionDigits: 0,
-    })} د.ع`;
+    return formatCurrency(amount, currency);
 }
 
 function SalesPage() {
@@ -133,17 +130,13 @@ function SalesPage() {
             <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                     label="إجمالي الفواتير"
-                    value={summary.invoiceCount.toLocaleString(
-                        "ar-IQ",
-                    )}
+                    value={formatNumber(summary.invoiceCount)}
                     icon={<FileText size={22} />}
                     iconClassName="bg-slate-100 text-slate-700"
                 />
                 <SummaryCard
                     label="الفواتير المكتملة"
-                    value={summary.completedCount.toLocaleString(
-                        "ar-IQ",
-                    )}
+                    value={formatNumber(summary.completedCount)}
                     icon={<CircleCheckBig size={22} />}
                     iconClassName="bg-emerald-50 text-emerald-700"
                 />
@@ -236,12 +229,12 @@ function SalesPage() {
                                     className="transition hover:bg-slate-50"
                                 >
                                     <td className="px-4 py-4 font-semibold" dir="ltr">
-                                        {invoice.invoiceNumber}
+                                        {normalizeWesternDigits(
+                                            invoice.invoiceNumber,
+                                        )}
                                     </td>
                                     <td className="whitespace-nowrap px-4 py-4 text-slate-600">
-                                        {new Date(
-                                            invoice.createdAt,
-                                        ).toLocaleDateString("ar-IQ")}
+                                        {formatDate(invoice.createdAt)}
                                     </td>
                                     <td className="px-4 py-4">
                                         {invoice.customerNameSnapshot ||
@@ -469,7 +462,9 @@ function DeleteDraftDialog({
                         <p className="mt-2 text-sm leading-6 text-slate-600">
                             هل تريد حذف الفاتورة{" "}
                             <strong dir="ltr">
-                                {invoice.invoiceNumber}
+                                {normalizeWesternDigits(
+                                    invoice.invoiceNumber,
+                                )}
                             </strong>
                             ؟ لا يمكن التراجع عن هذا الإجراء.
                         </p>

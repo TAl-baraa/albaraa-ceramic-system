@@ -20,6 +20,12 @@ import type {
     SaleInvoiceStatus,
 } from "../types/sale";
 import {
+    formatDateTime,
+    formatNumber,
+    formatQuantity,
+    normalizeWesternDigits,
+} from "../utils/formatters";
+import {
     formatSaleMoney,
     getPaymentExplanation,
     getRemainingPresentation,
@@ -200,7 +206,9 @@ function SaleDetailsPage() {
                                     فاتورة بيع
                                 </p>
                                 <h3 className="mt-1 text-2xl font-bold" dir="ltr">
-                                    {invoice.invoiceNumber}
+                                    {normalizeWesternDigits(
+                                        invoice.invoiceNumber,
+                                    )}
                                 </h3>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -268,9 +276,7 @@ function SaleDetailsPage() {
                         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <DetailCard
                                 label="التاريخ"
-                                value={new Date(
-                                    invoice.createdAt,
-                                ).toLocaleString("ar-IQ")}
+                                value={formatDateTime(invoice.createdAt)}
                             />
                             <DetailCard
                                 label="العميل"
@@ -287,9 +293,7 @@ function SaleDetailsPage() {
                                 label="تاريخ الاعتماد"
                                 value={
                                     invoice.completedAt
-                                        ? new Date(
-                                              invoice.completedAt,
-                                          ).toLocaleString("ar-IQ")
+                                        ? formatDateTime(invoice.completedAt)
                                         : "لم تعتمد بعد"
                                 }
                             />
@@ -312,7 +316,7 @@ function SaleDetailsPage() {
                                 <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-3">
                                     <DetailCard
                                         label="حركات المخزون"
-                                        value={`تم إنشاء ${invoice.stockMovementIds.length.toLocaleString("ar-IQ")} حركات مخزون`}
+                                        value={`تم إنشاء ${formatNumber(invoice.stockMovementIds.length)} حركات مخزون`}
                                     />
                                     <DetailCard
                                         label="الحركة المالية"
@@ -327,10 +331,8 @@ function SaleDetailsPage() {
                                         label="وقت الاعتماد"
                                         value={
                                             invoice.completedAt
-                                                ? new Date(
+                                                ? formatDateTime(
                                                       invoice.completedAt,
-                                                  ).toLocaleString(
-                                                      "ar-IQ",
                                                   )
                                                 : "—"
                                         }
@@ -349,9 +351,9 @@ function SaleDetailsPage() {
                                         label="تاريخ الإلغاء"
                                         value={
                                             invoice.cancelledAt
-                                                ? new Date(
+                                                ? formatDateTime(
                                                       invoice.cancelledAt,
-                                                  ).toLocaleString("ar-IQ")
+                                                  )
                                                 : "—"
                                         }
                                     />
@@ -366,15 +368,15 @@ function SaleDetailsPage() {
                                         label="تاريخ الاعتماد الأصلي"
                                         value={
                                             invoice.completedAt
-                                                ? new Date(
+                                                ? formatDateTime(
                                                       invoice.completedAt,
-                                                  ).toLocaleString("ar-IQ")
+                                                  )
                                                 : "—"
                                         }
                                     />
                                     <DetailCard
                                         label="حركات عكس المخزون"
-                                        value={`تم إنشاء ${invoice.reversalStockMovementIds.length.toLocaleString("ar-IQ")} حركات عكس`}
+                                        value={`تم إنشاء ${formatNumber(invoice.reversalStockMovementIds.length)} حركات عكس`}
                                     />
                                 </div>
                             </div>
@@ -418,9 +420,7 @@ function SaleDetailsPage() {
                                     {items.map((item, index) => (
                                         <tr key={item.id}>
                                             <td className="px-4 py-4">
-                                                {(index + 1).toLocaleString(
-                                                    "ar-IQ",
-                                                )}
+                                                {formatNumber(index + 1)}
                                             </td>
                                             <td className="px-4 py-4 font-semibold" dir="ltr">
                                                 {
@@ -436,9 +436,7 @@ function SaleDetailsPage() {
                                                 {item.unit}
                                             </td>
                                             <td className="px-4 py-4">
-                                                {item.quantity.toLocaleString(
-                                                    "ar-IQ",
-                                                )}
+                                                {formatQuantity(item.quantity)}
                                             </td>
                                             <td className="px-4 py-4">
                                                 {formatSaleMoney(
@@ -528,7 +526,9 @@ function SaleDetailsPage() {
                 showFinalizeConfirmation &&
                 invoice.status === "draft" && (
                     <FinalizeInvoiceDialog
-                        invoiceNumber={invoice.invoiceNumber}
+                        invoiceNumber={normalizeWesternDigits(
+                            invoice.invoiceNumber,
+                        )}
                         customerName={
                             invoice.customerNameSnapshot || "بيع نقدي"
                         }
@@ -598,7 +598,11 @@ function CancelInvoiceDialog({
                 <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-4 text-sm">
                     <p>
                         رقم الفاتورة:{" "}
-                        <strong dir="ltr">{invoice.invoiceNumber}</strong>
+                        <strong dir="ltr">
+                            {normalizeWesternDigits(
+                                invoice.invoiceNumber,
+                            )}
+                        </strong>
                     </p>
                     <p>
                         العميل:{" "}
@@ -618,7 +622,7 @@ function CancelInvoiceDialog({
                     <p>
                         عدد المنتجات:{" "}
                         <strong>
-                            {itemCount.toLocaleString("ar-IQ")}
+                            {formatNumber(itemCount)}
                         </strong>
                     </p>
                 </div>

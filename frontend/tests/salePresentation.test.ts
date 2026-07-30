@@ -5,6 +5,7 @@ import type { SaleInvoiceItem } from "../src/types/sale.ts";
 import {
     formatSaleMoney,
     getPrintableCustomer,
+    getPrintableInvoiceStatusLabel,
     getPrintableItemRows,
     getRemainingPresentation,
 } from "../src/utils/salePresentation.ts";
@@ -67,7 +68,32 @@ test("deleted customer keeps snapshot name and omits live details", () => {
     );
 });
 
+test("cash sale uses its safe printable customer label", () => {
+    assert.deepEqual(
+        getPrintableCustomer(
+            {
+                customerId: null,
+                customerNameSnapshot: "",
+            },
+            [],
+        ),
+        {
+            name: "بيع نقدي",
+            phone: null,
+            address: null,
+        },
+    );
+});
+
+test("cancelled invoices receive the printable cancellation label", () => {
+    assert.equal(
+        getPrintableInvoiceStatusLabel("cancelled"),
+        "فاتورة ملغاة",
+    );
+    assert.equal(getPrintableInvoiceStatusLabel("completed"), null);
+});
+
 test("formats IQD without decimals and USD with two decimals", () => {
-    assert.equal(formatSaleMoney(1250.75, "IQD"), "١٬٢٥١ د.ع");
+    assert.equal(formatSaleMoney(1250.75, "IQD"), "1,251 د.ع");
     assert.equal(formatSaleMoney(1250, "USD"), "USD 1,250.00");
 });

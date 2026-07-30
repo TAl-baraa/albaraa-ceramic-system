@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AdminLayout from "./components/layout/AdminLayout";
 import CustomersPage from "./pages/CustomersPage";
+import CustomerStatementPage from "./pages/CustomerStatementPage";
 import DashboardPage from "./pages/DashboardPage";
 import InventoryPage from "./pages/InventoryPage";
 import ProductsPage from "./pages/ProductsPage";
@@ -25,6 +26,10 @@ function App() {
           element={<SaleDetailsPage />}
         />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route
+          path="/customers/:customerId/statement"
+          element={<CustomerStatementPage />}
+        />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

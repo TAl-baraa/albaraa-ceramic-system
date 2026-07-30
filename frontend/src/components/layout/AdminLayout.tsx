@@ -80,6 +80,8 @@ function AdminLayout() {
         pageTitles[location.pathname] ??
         (location.pathname.startsWith("/sales/")
             ? pageTitles["/sales"]
+            : location.pathname.startsWith("/customers/")
+              ? pageTitles["/customers"]
             : pageTitles["/dashboard"]);
 
     return (

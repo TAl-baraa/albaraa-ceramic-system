@@ -5,21 +5,18 @@ import type {
 import type {
     SaleInvoice,
     SaleInvoiceItem,
+    SaleInvoiceStatus,
 } from "../types/sale";
+import {
+    formatCurrency,
+    formatPhoneNumber,
+} from "./formatters.ts";
 
 export function formatSaleMoney(
     amount: number,
     currency: Currency,
 ) {
-    return currency === "USD"
-        ? `USD ${amount.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          })}`
-        : `${amount.toLocaleString("ar-IQ", {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-          })} د.ع`;
+    return formatCurrency(amount, currency);
 }
 
 export function getRemainingPresentation(
@@ -69,7 +66,9 @@ export function getPrintableCustomer(
             invoice.customerId === null
                 ? "بيع نقدي"
                 : invoice.customerNameSnapshot,
-        phone: currentCustomer?.phone || null,
+        phone: currentCustomer?.phone
+            ? formatPhoneNumber(currentCustomer.phone)
+            : null,
         address: currentCustomer?.address || null,
     };
 }
@@ -86,6 +85,12 @@ export function getPrintableItemRows(
         unitPrice: item.unitPrice,
         total: item.total,
     }));
+}
+
+export function getPrintableInvoiceStatusLabel(
+    status: SaleInvoiceStatus,
+) {
+    return status === "cancelled" ? "فاتورة ملغاة" : null;
 }
 
 export function getPaymentExplanation(

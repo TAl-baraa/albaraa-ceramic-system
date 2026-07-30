@@ -13,7 +13,7 @@ function normalizeAmount(amount: number) {
     return Number(amount.toFixed(6));
 }
 
-function applyTransaction(
+export function applyCustomerTransaction(
     balance: CustomerBalance,
     transaction: CustomerTransaction,
 ): CustomerBalance {
@@ -67,7 +67,7 @@ export function recalculateCustomerTransactionHistory(
         ),
     ).map((transaction) => {
         if (isActive(transaction)) {
-            balance = applyTransaction(balance, transaction);
+            balance = applyCustomerTransaction(balance, transaction);
         }
 
         return {
@@ -87,7 +87,7 @@ export function recalculateAllTransactionBalances(
             balancesByCustomer.get(transaction.customerId) ??
             EMPTY_CUSTOMER_BALANCE;
         const balanceAfter = isActive(transaction)
-            ? applyTransaction(previousBalance, transaction)
+            ? applyCustomerTransaction(previousBalance, transaction)
             : previousBalance;
 
         balancesByCustomer.set(transaction.customerId, balanceAfter);
@@ -107,7 +107,7 @@ export function calculateCustomerNetBalance(
         (balance, transaction) =>
             transaction.customerId === customerId
                 && isActive(transaction)
-                ? applyTransaction(balance, transaction)
+                ? applyCustomerTransaction(balance, transaction)
                 : balance,
         { ...EMPTY_CUSTOMER_BALANCE },
     );

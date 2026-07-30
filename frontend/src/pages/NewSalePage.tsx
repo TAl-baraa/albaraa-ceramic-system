@@ -26,6 +26,13 @@ import {
     generateNextInvoiceNumber,
     validateSaleQuantity,
 } from "../utils/salesCalculations";
+import {
+    formatCurrency,
+    formatNumber,
+    formatPhoneNumber,
+    formatQuantity,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 
 type EditorItem = SaleInvoiceItem & {
     quantityInput: string;
@@ -54,14 +61,7 @@ function makeId(existingIds: number[]) {
 }
 
 function formatMoney(amount: number, currency: Currency) {
-    return currency === "USD"
-        ? `USD ${amount.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          })}`
-        : `${amount.toLocaleString("ar-IQ", {
-              maximumFractionDigits: 0,
-          })} د.ع`;
+    return formatCurrency(amount, currency);
 }
 
 function validateUnitPrice(
@@ -726,6 +726,7 @@ export function SaleInvoiceEditor({
                         <Field label="التاريخ">
                             <input
                                 type="datetime-local"
+                                lang="en"
                                 value={dateValue}
                                 onChange={(event) => {
                                     setDateValue(event.target.value);
@@ -810,7 +811,11 @@ export function SaleInvoiceEditor({
                                                 className="text-slate-500"
                                                 dir="ltr"
                                             >
-                                                {customer.phone || "—"}
+                                                {customer.phone
+                                                    ? formatPhoneNumber(
+                                                          customer.phone,
+                                                      )
+                                                    : "—"}
                                             </span>
                                         </button>
                                     ))}
@@ -873,11 +878,12 @@ export function SaleInvoiceEditor({
                                                 {product.name}
                                             </span>
                                             <span className="mt-1 block text-xs text-slate-500">
-                                                {product.size} •{" "}
-                                                {product.company} • المتوفر{" "}
-                                                {product.quantity.toLocaleString(
-                                                    "ar-IQ",
+                                                {normalizeWesternDigits(
+                                                    product.size,
                                                 )}{" "}
+                                                •{" "}
+                                                {product.company} • المتوفر{" "}
+                                                {formatQuantity(product.quantity)}{" "}
                                                 {product.unit}
                                             </span>
                                         </span>
@@ -965,14 +971,15 @@ export function SaleInvoiceEditor({
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     {product
-                                                        ? product.quantity.toLocaleString(
-                                                              "ar-IQ",
+                                                        ? formatQuantity(
+                                                              product.quantity,
                                                           )
                                                         : "غير متوفر"}
                                                 </td>
                                                 <td className="w-48 px-4 py-4 align-top">
                                                     <input
                                                         type="number"
+                                                        lang="en"
                                                         min="0.01"
                                                         step={
                                                             item.unit ===
@@ -986,8 +993,10 @@ export function SaleInvoiceEditor({
                                                         onChange={(event) =>
                                                             updateItemQuantity(
                                                                 item.id,
-                                                                event.target
-                                                                    .value,
+                                                                normalizeWesternDigits(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
                                                             )
                                                         }
                                                         className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-slate-400"
@@ -1003,6 +1012,7 @@ export function SaleInvoiceEditor({
                                                 <td className="w-56 px-4 py-4 align-top">
                                                     <input
                                                         type="number"
+                                                        lang="en"
                                                         min="0.01"
                                                         step={
                                                             currency ===
@@ -1016,8 +1026,10 @@ export function SaleInvoiceEditor({
                                                         onChange={(event) =>
                                                             updateItemPrice(
                                                                 item.id,
-                                                                event.target
-                                                                    .value,
+                                                                normalizeWesternDigits(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
                                                             )
                                                         }
                                                         placeholder={
@@ -1091,6 +1103,7 @@ export function SaleInvoiceEditor({
                             <Field label="الخصم">
                                 <input
                                     type="number"
+                                    lang="en"
                                     min="0"
                                     step={
                                         currency === "USD" ? "0.01" : "1"
@@ -1098,7 +1111,9 @@ export function SaleInvoiceEditor({
                                     value={discountInput}
                                     onChange={(event) => {
                                         setDiscountInput(
-                                            event.target.value,
+                                            normalizeWesternDigits(
+                                                event.target.value,
+                                            ),
                                         );
                                         setSuccessMessage("");
                                     }}
@@ -1108,13 +1123,18 @@ export function SaleInvoiceEditor({
                             <Field label="المدفوع">
                                 <input
                                     type="number"
+                                    lang="en"
                                     min="0"
                                     step={
                                         currency === "USD" ? "0.01" : "1"
                                     }
                                     value={paidInput}
                                     onChange={(event) => {
-                                        setPaidInput(event.target.value);
+                                        setPaidInput(
+                                            normalizeWesternDigits(
+                                                event.target.value,
+                                            ),
+                                        );
                                         setSuccessMessage("");
                                     }}
                                     className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
@@ -1323,7 +1343,7 @@ export function FinalizeInvoiceDialog({
                     />
                     <TotalRow
                         label="عدد المنتجات"
-                        value={itemCount.toLocaleString("ar-IQ")}
+                        value={formatNumber(itemCount)}
                     />
                 </div>
                 {remainingAmount < 0 && (

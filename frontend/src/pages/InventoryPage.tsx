@@ -18,6 +18,13 @@ import type {
     StockMovement,
     StockMovementType,
 } from "../types/stockMovement";
+import {
+    formatCurrency,
+    formatDateTime,
+    formatNumber,
+    formatQuantity,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 
 const movementTypeLabels: Record<StockMovementType, string> = {
     in: "إدخال",
@@ -276,9 +283,7 @@ function InventoryPage() {
             <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <InventorySummaryCard
                     label="إجمالي المساحة"
-                    value={totalSquareMeters.toLocaleString(
-                        "ar-IQ",
-                    )}
+                    value={formatQuantity(totalSquareMeters)}
                     unit="متر مربع"
                     icon={<Boxes size={22} />}
                     iconClassName="bg-slate-100 text-slate-700"
@@ -286,7 +291,7 @@ function InventoryPage() {
 
                 <InventorySummaryCard
                     label="إجمالي القطع"
-                    value={totalPieces.toLocaleString("ar-IQ")}
+                    value={formatQuantity(totalPieces)}
                     unit="قطعة"
                     icon={<Boxes size={22} />}
                     iconClassName="bg-slate-100 text-slate-700"
@@ -294,9 +299,7 @@ function InventoryPage() {
 
                 <InventorySummaryCard
                     label="منخفض أو نافد"
-                    value={lowStockCount.toLocaleString(
-                        "ar-IQ",
-                    )}
+                    value={formatNumber(lowStockCount)}
                     unit="منتج"
                     icon={<AlertTriangle size={22} />}
                     iconClassName="bg-amber-50 text-amber-700"
@@ -304,9 +307,7 @@ function InventoryPage() {
 
                 <InventorySummaryCard
                     label="القيمة بسعر البيع"
-                    value={totalSellingValueIqd.toLocaleString(
-                        "ar-IQ",
-                    )}
+                    value={formatCurrency(totalSellingValueIqd, "IQD")}
                     unit="دينار عراقي"
                     icon={<WalletCards size={22} />}
                     iconClassName="bg-emerald-50 text-emerald-700"
@@ -314,13 +315,7 @@ function InventoryPage() {
 
                 <InventorySummaryCard
                     label="القيمة بسعر الشراء"
-                    value={totalPurchaseValueUsd.toLocaleString(
-                        "en-US",
-                        {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        },
-                    )}
+                    value={formatCurrency(totalPurchaseValueUsd, "USD")}
                     unit="دولار أمريكي"
                     icon={<CircleDollarSign size={22} />}
                     iconClassName="bg-blue-50 text-blue-700"
@@ -405,9 +400,7 @@ function InventoryPage() {
                                         </td>
 
                                         <td className="px-5 py-4 font-semibold">
-                                            {product.quantity.toLocaleString(
-                                                "ar-IQ",
-                                            )}{" "}
+                                            {formatQuantity(product.quantity)}{" "}
                                             <span className="font-normal text-slate-500">
                                                 {product.unit}
                                             </span>
@@ -425,21 +418,11 @@ function InventoryPage() {
                                         </td>
 
                                         <td className="px-5 py-4 font-semibold">
-                                            {sellingValue.toLocaleString(
-                                                "ar-IQ",
-                                            )}{" "}
-                                            د.ع
+                                            {formatCurrency(sellingValue, "IQD")}
                                         </td>
 
                                         <td className="px-5 py-4 font-semibold">
-                                            $
-                                            {purchaseValue.toLocaleString(
-                                                "en-US",
-                                                {
-                                                    minimumFractionDigits: 2,
-                                                    maximumFractionDigits: 2,
-                                                },
-                                            )}
+                                            {formatCurrency(purchaseValue, "USD")}
                                         </td>
                                     </tr>
                                 );
@@ -595,7 +578,7 @@ function InventoryPage() {
                                                 key={product.id}
                                                 value={product.id}
                                             >
-                                                {product.code} — {product.name} — {product.quantity.toLocaleString("ar-IQ")} {product.unit}
+                                                {product.code} — {product.name} — {formatQuantity(product.quantity)} {product.unit}
                                             </option>
                                         ))}
                                     </select>
@@ -630,6 +613,7 @@ function InventoryPage() {
                                         </span>
                                         <input
                                             type="number"
+                                            lang="en"
                                             min="0"
                                             step={
                                                 selectedProduct?.unit === "قطعة"
@@ -639,7 +623,9 @@ function InventoryPage() {
                                             value={movementQuantity}
                                             onChange={(event) => {
                                                 setMovementQuantity(
-                                                    event.target.value,
+                                                    normalizeWesternDigits(
+                                                        event.target.value,
+                                                    ),
                                                 );
                                                 setMovementError("");
                                             }}
@@ -651,7 +637,7 @@ function InventoryPage() {
 
                                 {selectedProduct && (
                                     <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                                        الكمية الحالية: {selectedProduct.quantity.toLocaleString("ar-IQ")} {selectedProduct.unit}
+                                        الكمية الحالية: {formatQuantity(selectedProduct.quantity)} {selectedProduct.unit}
                                     </p>
                                 )}
 
@@ -715,10 +701,7 @@ function MovementHistoryRow({
     return (
         <tr className="transition hover:bg-slate-50">
             <td className="whitespace-nowrap px-5 py-4 text-slate-600">
-                {new Date(movement.createdAt).toLocaleString("ar-IQ", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                })}
+                {formatDateTime(movement.createdAt)}
             </td>
             <td className="px-5 py-4 font-medium">
                 {product?.name ?? "منتج محذوف"}
@@ -732,13 +715,13 @@ function MovementHistoryRow({
                 </span>
             </td>
             <td className="px-5 py-4 font-semibold">
-                {movement.quantity.toLocaleString("ar-IQ")} {unit}
+                {formatQuantity(movement.quantity)} {unit}
             </td>
             <td className="px-5 py-4">
-                {movement.previousQuantity.toLocaleString("ar-IQ")} {unit}
+                {formatQuantity(movement.previousQuantity)} {unit}
             </td>
             <td className="px-5 py-4 font-semibold">
-                {movement.newQuantity.toLocaleString("ar-IQ")} {unit}
+                {formatQuantity(movement.newQuantity)} {unit}
             </td>
             <td className="max-w-xs px-5 py-4 text-slate-600">
                 {movement.note || "—"}
@@ -753,7 +736,9 @@ function MovementHistoryRow({
                             {movement.sourceType === "sale_invoice"
                                 ? "فاتورة بيع"
                                 : "عكس مخزون بسبب إلغاء الفاتورة"}{" "}
-                            {movement.sourceReference}
+                            {normalizeWesternDigits(
+                                movement.sourceReference,
+                            )}
                         </Link>
                     )}
             </td>

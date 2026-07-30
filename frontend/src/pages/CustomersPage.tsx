@@ -7,6 +7,7 @@ import {
     Eye,
     Pencil,
     Plus,
+    Printer,
     Search,
     Trash2,
     Users,
@@ -29,6 +30,14 @@ import {
     filterTransactionsByCurrency,
     recalculateCustomerTransactionHistory,
 } from "../utils/customerBalance";
+import {
+    formatCurrency,
+    formatDate,
+    formatDateTime,
+    formatNumber,
+    formatPhoneNumber,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 
 const OVERDUE_DAYS = 30;
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -101,27 +110,18 @@ function getBalanceStatus(balance: number) {
 }
 
 function formatBalance(amount: number, currency: Currency) {
-    if (currency === "USD") {
-        return `USD ${amount.toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        })}`;
-    }
-
-    return `${amount.toLocaleString("ar-IQ", {
-        maximumFractionDigits: 6,
-    })} IQD`;
+    return formatCurrency(amount, currency);
 }
 
 function formatSummaryAmount(amount: number, currency: Currency) {
-    return amount.toLocaleString(
-        currency === "IQD" ? "ar-IQ" : "en-US",
+    return formatNumber(
+        amount,
         currency === "USD"
             ? {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
               }
-            : { maximumFractionDigits: 6 },
+            : { maximumFractionDigits: 0 },
     );
 }
 
@@ -227,19 +227,42 @@ function CustomersPage() {
     }
 
     useEffect(() => {
-        if (searchParams.get("action") !== "add") {
+        const action = searchParams.get("action");
+        const requestedCustomerId = Number(
+            searchParams.get("customerId"),
+        );
+        const requestedCurrency = searchParams.get("currency");
+
+        if (action === "add") {
+            openAddCustomerDialog();
+        } else if (
+            Number.isFinite(requestedCustomerId) &&
+            customers.some(
+                (customer) => customer.id === requestedCustomerId,
+            )
+        ) {
+            setSelectedCustomerId(requestedCustomerId);
+            if (
+                requestedCurrency === "IQD" ||
+                requestedCurrency === "USD"
+            ) {
+                setDetailsCurrency(requestedCurrency);
+            }
+        } else {
             return;
         }
-        openAddCustomerDialog();
+
         const nextParams = new URLSearchParams(searchParams);
         nextParams.delete("action");
+        nextParams.delete("customerId");
+        nextParams.delete("currency");
         setSearchParams(nextParams, { replace: true });
-    }, [searchParams, setSearchParams]);
+    }, [customers, searchParams, setSearchParams]);
 
     function openEditCustomerDialog(customer: Customer) {
         setCustomerToEdit(customer);
         setCustomerName(customer.name);
-        setCustomerPhone(customer.phone);
+        setCustomerPhone(formatPhoneNumber(customer.phone));
         setCustomerAddress(customer.address);
         setCustomerNotes(customer.notes);
         setCustomerFormError("");
@@ -406,7 +429,7 @@ function CustomersPage() {
             <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                     label="إجمالي العملاء"
-                    value={customers.length.toLocaleString("ar-IQ")}
+                    value={formatNumber(customers.length)}
                     icon={<Users size={22} />}
                     iconClassName="bg-slate-100 text-slate-700"
                 />
@@ -432,7 +455,7 @@ function CustomersPage() {
                 />
                 <SummaryCard
                     label="عملاء متأخرون"
-                    value={overdueCustomersCount.toLocaleString("ar-IQ")}
+                    value={formatNumber(overdueCustomersCount)}
                     unit="عميل"
                     icon={<AlertTriangle size={22} />}
                     iconClassName="bg-amber-50 text-amber-700"
@@ -509,7 +532,9 @@ function CustomersPage() {
                                             {customer.name}
                                         </td>
                                         <td className="px-5 py-4 text-slate-600" dir="ltr">
-                                            {customer.phone || "—"}
+                                            {customer.phone
+                                                ? formatPhoneNumber(customer.phone)
+                                                : "—"}
                                         </td>
                                         <BalanceCell
                                             amount={selectedBalance}
@@ -517,9 +542,9 @@ function CustomersPage() {
                                         />
                                         <td className="px-5 py-4 text-slate-600">
                                             {customer.lastPaymentAt
-                                                ? new Date(
+                                                ? formatDate(
                                                       customer.lastPaymentAt,
-                                                  ).toLocaleDateString("ar-IQ")
+                                                  )
                                                 : "لا توجد دفعات"}
                                         </td>
                                         <td className="px-5 py-4">
@@ -598,7 +623,11 @@ function CustomersPage() {
                     notes={customerNotes}
                     error={customerFormError}
                     onNameChange={setCustomerName}
-                    onPhoneChange={setCustomerPhone}
+                    onPhoneChange={(value) =>
+                        setCustomerPhone(
+                            normalizeWesternDigits(value),
+                        )
+                    }
                     onAddressChange={setCustomerAddress}
                     onNotesChange={setCustomerNotes}
                     clearError={() => setCustomerFormError("")}
@@ -862,6 +891,7 @@ function CustomerFormDialog(props: CustomerFormDialogProps) {
                     <FormField label="رقم الهاتف">
                         <input
                             type="tel"
+                            lang="en"
                             value={props.phone}
                             onChange={(event) => {
                                 props.onPhoneChange(event.target.value);
@@ -959,7 +989,14 @@ function CustomerDetailsDialog({
                     />
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <InfoBox label="رقم الهاتف" value={customer.phone || "—"} />
+                    <InfoBox
+                        label="رقم الهاتف"
+                        value={
+                            customer.phone
+                                ? formatPhoneNumber(customer.phone)
+                                : "—"
+                        }
+                    />
                     <InfoBox label="العنوان" value={customer.address || "—"} />
                     <div className="rounded-xl bg-slate-50 p-4">
                         <p className="text-xs text-slate-500">
@@ -995,6 +1032,13 @@ function CustomerDetailsDialog({
                 <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
                     <h5 className="font-bold">الحركات المالية</h5>
                     <div className="flex gap-2">
+                        <Link
+                            to={`/customers/${customer.id}/statement?currency=${selectedCurrency}`}
+                            className="inline-flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                            <Printer size={17} />
+                            طباعة كشف الحساب
+                        </Link>
                         <button
                             type="button"
                             onClick={onEdit}
@@ -1043,12 +1087,9 @@ function CustomerDetailsDialog({
                                                     : ""
                                             }`}
                                         >
-                                            {new Date(
+                                            {formatDateTime(
                                                 transaction.createdAt,
-                                            ).toLocaleString("ar-IQ", {
-                                                dateStyle: "medium",
-                                                timeStyle: "short",
-                                            })}
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 font-medium">
                                             {transactionTypeLabels[transaction.type]}
@@ -1091,7 +1132,9 @@ function CustomerDetailsDialog({
                                                     >
                                                         فاتورة بيع{" "}
                                                         {
-                                                            transaction.sourceReference
+                                                            normalizeWesternDigits(
+                                                                transaction.sourceReference,
+                                                            )
                                                         }
                                                     </Link>
                                                 )}
@@ -1238,9 +1281,9 @@ function CorrectionDialog({
                     <div className="grid gap-3 text-sm sm:grid-cols-2">
                         <InfoBox
                             label="التاريخ"
-                            value={new Date(
+                            value={formatDateTime(
                                 transaction.createdAt,
-                            ).toLocaleString("ar-IQ")}
+                            )}
                         />
                         <InfoBox
                             label="النوع"
@@ -1308,11 +1351,16 @@ function CorrectionDialog({
                     <FormField label="المبلغ المصحح">
                         <input
                             type="number"
+                            lang="en"
                             min="0.01"
                             step="0.01"
                             value={amount}
                             onChange={(event) => {
-                                setAmount(event.target.value);
+                                setAmount(
+                                    normalizeWesternDigits(
+                                        event.target.value,
+                                    ),
+                                );
                                 setError("");
                             }}
                             className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-400"
@@ -1520,11 +1568,16 @@ function TransactionDialog(props: TransactionDialogProps) {
                         <FormField label="المبلغ" className="sm:col-span-2">
                             <input
                                 type="number"
+                                lang="en"
                                 min="0.01"
                                 step="0.01"
                                 value={props.amount}
                                 onChange={(event) => {
-                                    props.onAmountChange(event.target.value);
+                                    props.onAmountChange(
+                                        normalizeWesternDigits(
+                                            event.target.value,
+                                        ),
+                                    );
                                     props.clearError();
                                 }}
                                 autoFocus

@@ -1,5 +1,6 @@
 import { Save, ShieldCheck, Store, UserCog } from "lucide-react";
 import { useState } from "react";
+import { normalizeWesternDigits } from "../utils/formatters";
 
 /*
  * يمثل إعدادات النظام التي يستطيع المدير تعديلها.
@@ -109,9 +110,15 @@ function SettingsPage() {
 
                             <input
                                 type="tel"
+                                lang="en"
                                 value={settings.phone}
                                 onChange={(event) =>
-                                    updateSetting("phone", event.target.value)
+                                    updateSetting(
+                                        "phone",
+                                        normalizeWesternDigits(
+                                            event.target.value,
+                                        ),
+                                    )
                                 }
                                 placeholder="07XXXXXXXXX"
                                 dir="ltr"
@@ -178,12 +185,17 @@ function SettingsPage() {
                             <div className="relative">
                                 <input
                                     type="number"
+                                    lang="en"
                                     min="1"
                                     value={settings.paymentDelayDays}
                                     onChange={(event) =>
                                         updateSetting(
                                             "paymentDelayDays",
-                                            Number(event.target.value),
+                                            Number(
+                                                normalizeWesternDigits(
+                                                    event.target.value,
+                                                ),
+                                            ),
                                         )
                                     }
                                     className="w-full rounded-xl border border-slate-200 px-4 py-3 pl-16 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100"

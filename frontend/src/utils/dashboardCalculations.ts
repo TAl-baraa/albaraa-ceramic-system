@@ -7,6 +7,10 @@ import type { Product } from "../types/product";
 import type { SaleInvoice } from "../types/sale";
 import type { StockMovement } from "../types/stockMovement";
 import { calculateCustomerNetBalance } from "./customerBalance.ts";
+import {
+    formatQuantity,
+    normalizeWesternDigits,
+} from "./formatters.ts";
 
 export type DashboardSalesSummary = {
     todaySales: number;
@@ -192,7 +196,7 @@ export function getDashboardActivities({
                 return [
                     {
                         key: `sale-completed-${invoice.id}`,
-                        title: `تم اعتماد فاتورة بيع ${invoice.invoiceNumber}`,
+                        title: `تم اعتماد فاتورة بيع ${normalizeWesternDigits(invoice.invoiceNumber)}`,
                         reference:
                             invoice.customerNameSnapshot || "بيع نقدي",
                         timestamp:
@@ -207,7 +211,7 @@ export function getDashboardActivities({
                 return [
                     {
                         key: `sale-cancelled-${invoice.id}`,
-                        title: `تم إلغاء فاتورة بيع ${invoice.invoiceNumber}`,
+                        title: `تم إلغاء فاتورة بيع ${normalizeWesternDigits(invoice.invoiceNumber)}`,
                         reference:
                             invoice.customerNameSnapshot || "بيع نقدي",
                         timestamp:
@@ -236,7 +240,7 @@ export function getDashboardActivities({
                       : "تصحيح";
             return {
                 key: `inventory-${movement.id}`,
-                title: `${typeLabel} ${movement.quantity.toLocaleString("ar-IQ")} ${product?.unit ?? ""} من المنتج ${code}`,
+                title: `${typeLabel} ${formatQuantity(movement.quantity)} ${product?.unit ?? ""} من المنتج ${code}`,
                 reference: movement.note || code,
                 timestamp: movement.createdAt,
                 detail: "",
@@ -258,7 +262,7 @@ export function getDashboardActivities({
                     customerName,
                 ),
                 reference:
-                    transaction.sourceReference ||
+                    normalizeWesternDigits(transaction.sourceReference) ||
                     transaction.note ||
                     customerName,
                 timestamp:

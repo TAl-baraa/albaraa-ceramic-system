@@ -26,6 +26,12 @@ import {
     getDashboardSalesSummary,
     getInventoryWarnings,
 } from "../utils/dashboardCalculations";
+import {
+    formatDateTime,
+    formatNumber,
+    formatQuantity,
+    normalizeWesternDigits,
+} from "../utils/formatters";
 import { formatSaleMoney } from "../utils/salePresentation";
 
 const statusLabels: Record<SaleInvoiceStatus, string> = {
@@ -129,25 +135,25 @@ function DashboardPage() {
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                     label="إجمالي المنتجات"
-                    value={products.length.toLocaleString("ar-IQ")}
+                    value={formatNumber(products.length)}
                     icon={<Package size={23} />}
                     iconClassName="bg-blue-50 text-blue-700"
                 />
                 <MetricCard
                     label="المنتجات منخفضة المخزون"
-                    value={lowStockCount.toLocaleString("ar-IQ")}
+                    value={formatNumber(lowStockCount)}
                     icon={<AlertTriangle size={23} />}
                     iconClassName="bg-amber-50 text-amber-700"
                 />
                 <MetricCard
                     label="المنتجات النافدة"
-                    value={outOfStockCount.toLocaleString("ar-IQ")}
+                    value={formatNumber(outOfStockCount)}
                     icon={<PackageX size={23} />}
                     iconClassName="bg-red-50 text-red-700"
                 />
                 <MetricCard
                     label="العملاء"
-                    value={customers.length.toLocaleString("ar-IQ")}
+                    value={formatNumber(customers.length)}
                     icon={<Users size={23} />}
                     iconClassName="bg-violet-50 text-violet-700"
                 />
@@ -185,9 +191,7 @@ function DashboardPage() {
                     />
                     <CompactMetric
                         label="الفواتير المكتملة"
-                        value={salesSummary.completedCount.toLocaleString(
-                            "ar-IQ",
-                        )}
+                        value={formatNumber(salesSummary.completedCount)}
                     />
                 </div>
             </section>
@@ -329,11 +333,11 @@ function DashboardPage() {
                                         </td>
                                         <td className="px-5 py-4">{product.name}</td>
                                         <td className="px-5 py-4 font-bold">
-                                            {product.quantity.toLocaleString("ar-IQ")}
+                                            {formatQuantity(product.quantity)}
                                         </td>
                                         <td className="px-5 py-4">{product.unit}</td>
                                         <td className="px-5 py-4">
-                                            {product.minimumQuantity.toLocaleString("ar-IQ")}
+                                            {formatQuantity(product.minimumQuantity)}
                                         </td>
                                         <td className="px-5 py-4">
                                             <span
@@ -378,7 +382,9 @@ function DashboardPage() {
                                 {recentInvoices.map((invoice) => (
                                     <tr key={invoice.id}>
                                         <td className="px-5 py-4 font-semibold" dir="ltr">
-                                            {invoice.invoiceNumber}
+                                            {normalizeWesternDigits(
+                                                invoice.invoiceNumber,
+                                            )}
                                         </td>
                                         <td className="px-5 py-4">
                                             {invoice.customerNameSnapshot || "بيع نقدي"}
@@ -556,16 +562,6 @@ function EmptyState({ text }: { text: string }) {
             {text}
         </div>
     );
-}
-
-function formatDateTime(value: string) {
-    const date = new Date(value);
-    return Number.isFinite(date.getTime())
-        ? date.toLocaleString("ar-IQ", {
-              dateStyle: "short",
-              timeStyle: "short",
-          })
-        : "—";
 }
 
 export default DashboardPage;
