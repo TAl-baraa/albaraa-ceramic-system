@@ -1,4 +1,5 @@
 from typing import Any
+from decimal import Decimal
 
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
@@ -187,6 +188,165 @@ class StockMovementPersistenceError(APIError):
             status.HTTP_409_CONFLICT,
             "stock_movement_conflict",
             "The stock movement could not be saved",
+        )
+
+
+class SaleInvoiceNotFoundError(APIError):
+    def __init__(self) -> None:
+        super().__init__(status.HTTP_404_NOT_FOUND, "sale_invoice_not_found", "Sale invoice not found")
+
+
+class SaleInvoiceNotDraftError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "sale_invoice_not_draft",
+            "Only draft invoices can be changed or deleted",
+        )
+
+
+class ConflictingInvoiceItemPriceError(APIError):
+    def __init__(self, product_id: int) -> None:
+        super().__init__(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "conflicting_item_price",
+            "Duplicate product items must use the same unit price",
+            {"productId": product_id},
+        )
+
+
+class InvoiceStockExceededError(APIError):
+    def __init__(self, *, product_id: int, code: str, name: str, requested: Any, available: Any, unit: str) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_quantity_exceeds_stock",
+            "Draft quantity exceeds currently available stock",
+            {
+                "productId": product_id,
+                "code": code,
+                "name": name,
+                "requestedQuantity": str(requested),
+                "availableQuantity": str(available),
+                "unit": unit,
+            },
+        )
+
+
+class InvalidInvoicePricePrecisionError(APIError):
+    def __init__(self, currency: str) -> None:
+        super().__init__(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "invalid_unit_price_precision",
+            "IQD prices must be whole numbers; USD prices allow at most two decimal places",
+            {"currency": currency},
+        )
+
+
+class InvalidInvoiceDiscountError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "invalid_invoice_discount",
+            "Discount cannot exceed the invoice subtotal",
+        )
+
+
+class InvoiceNumberGenerationError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_number_generation_conflict",
+            "A unique invoice number could not be generated",
+        )
+
+
+class SaleInvoicePersistenceError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "sale_invoice_conflict",
+            "The draft invoice could not be saved",
+        )
+
+
+class SaleInvoiceNotCompletedError(APIError):
+    def __init__(self, status_value: str) -> None:
+        code = "sale_invoice_already_cancelled" if status_value == "cancelled" else "sale_invoice_not_completed"
+        message = "Sale invoice is already cancelled" if status_value == "cancelled" else "Only completed invoices can be cancelled"
+        super().__init__(status.HTTP_409_CONFLICT, code, message)
+
+
+class SaleInvoiceAlreadyCompletedError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "sale_invoice_already_completed",
+            "Sale invoice has already been completed",
+        )
+
+
+class CashSaleUnpaidError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "cash_sale_unpaid_balance",
+            "A cash sale cannot be completed with an unpaid balance.",
+        )
+
+
+class InvoiceProductUnitChangedError(APIError):
+    def __init__(self, *, product_id: int, expected: str, current: str) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_product_unit_changed",
+            "Product unit no longer matches the invoice snapshot",
+            {"productId": product_id, "invoiceUnit": expected, "currentUnit": current},
+        )
+
+
+class InvoiceCompletionStockError(APIError):
+    def __init__(self, *, product_id: int, code: str, name: str, requested: Any, available: Any, unit: str) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_insufficient_stock",
+            "Current inventory is insufficient to complete the invoice",
+            {
+                "productId": product_id,
+                "productCode": code,
+                "productName": name,
+                "requestedQuantity": f"{Decimal(requested):.6f}",
+                "availableQuantity": f"{Decimal(available):.6f}",
+                "unit": unit,
+            },
+        )
+
+
+class InvoiceMissingProductsError(APIError):
+    def __init__(self, products: list[dict[str, Any]]) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_products_missing",
+            "One or more invoice products no longer exist",
+            {"products": products},
+        )
+
+
+class InvoiceMalformedError(APIError):
+    def __init__(self, message: str = "Stored invoice data is invalid") -> None:
+        super().__init__(status.HTTP_409_CONFLICT, "malformed_invoice", message)
+
+
+class InvoiceLifecycleIntegrityError(APIError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(status.HTTP_409_CONFLICT, code, message)
+
+
+class InvoiceLinkedTransactionConflictError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "invoice_linked_transaction_conflict",
+            "The invoice-linked customer transaction is missing or inconsistent",
         )
 
 

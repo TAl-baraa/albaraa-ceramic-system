@@ -284,6 +284,8 @@ def void_transaction(
     reason: str,
     *,
     allow_source_linked: bool = False,
+    commit: bool = True,
+    voided_at: datetime | None = None,
 ) -> CustomerTransaction:
     transaction = get_transaction(db, customer_id, transaction_id)
     if transaction.status == "voided":
@@ -291,8 +293,11 @@ def void_transaction(
     if transaction.source_type == "sale_invoice" and not allow_source_linked:
         raise SourceLinkedTransactionProtectedError()
     transaction.status = "voided"
-    transaction.voided_at = _now()
+    transaction.voided_at = voided_at or _now()
     transaction.void_reason = reason.strip()
-    _commit(db)
-    db.refresh(transaction)
+    if commit:
+        _commit(db)
+        db.refresh(transaction)
+    else:
+        db.flush()
     return transaction

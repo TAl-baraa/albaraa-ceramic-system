@@ -73,6 +73,8 @@ def create_internal_stock_movement(
     source_id: int | None = None,
     source_reference: str = "",
     note: str = "",
+    created_at: datetime | None = None,
+    locked_product: Product | None = None,
 ) -> StockMovement:
     """Create and flush a movement without committing the caller's transaction."""
     if source_type not in SUPPORTED_SOURCE_TYPES:
@@ -80,7 +82,9 @@ def create_internal_stock_movement(
     if movement_type not in {"in", "out", "adjustment"}:
         raise StockMovementPersistenceError()
 
-    product = _lock_product(db, product_id)
+    product = locked_product or _lock_product(db, product_id)
+    if product.id != product_id:
+        raise ProductNotFoundError()
     previous = product.quantity
     if movement_type == "adjustment":
         if final_quantity is None or final_quantity < 0:
@@ -119,6 +123,7 @@ def create_internal_stock_movement(
         source_type=source_type,
         source_id=source_id,
         source_reference=source_reference.strip(),
+        created_at=created_at,
     )
     db.add(movement)
     db.flush()

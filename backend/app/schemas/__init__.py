@@ -18,6 +18,11 @@ from app.schemas.inventory import (
     InventorySummaryRead, LowStockProductRead, StockAdjustmentRequest, StockInRequest,
     StockMovementListResponse, StockMovementRead, StockOutRequest,
 )
+from app.schemas.sale_invoice import (
+    SaleInvoiceAuditRead, SaleInvoiceCancellationRequest, SaleInvoiceDraftCreate,
+    SaleInvoiceDraftUpdate, SaleInvoiceItemCreate, SaleInvoiceItemRead, SaleInvoiceListItemRead,
+    SaleInvoiceListResponse, SaleInvoiceRead, SalesSummaryRead,
+)
 
 __all__ = [
     "CustomerBalanceRead", "CustomerCreate", "CustomerListResponse", "CustomerRead",
@@ -27,4 +32,7 @@ __all__ = [
     "ProductListResponse",
     "InventorySummaryRead", "LowStockProductRead", "StockAdjustmentRequest", "StockInRequest",
     "StockMovementListResponse", "StockMovementRead", "StockOutRequest",
+    "SaleInvoiceDraftCreate", "SaleInvoiceDraftUpdate", "SaleInvoiceItemCreate",
+    "SaleInvoiceItemRead", "SaleInvoiceListItemRead", "SaleInvoiceListResponse", "SaleInvoiceRead",
+    "SaleInvoiceAuditRead", "SaleInvoiceCancellationRequest", "SalesSummaryRead",
 ]
