@@ -41,3 +41,66 @@ export type SaleInvoiceItem = {
     unitPrice: number;
     total: number;
 };
+
+export type SaleInvoiceItemRecord = SaleInvoiceItem & {
+    apiCreatedAt?: string;
+};
+
+export type SaleInvoiceCompletionAudit = {
+    sourceReference: string;
+    stockMovementCount: number;
+    reversalMovementCount: number;
+    customerTransactionCreated: boolean;
+    customerTransactionVoided: boolean;
+};
+
+export type SaleInvoiceRecord = SaleInvoice & {
+    items: SaleInvoiceItemRecord[];
+    itemCount: number;
+    completionAudit: SaleInvoiceCompletionAudit;
+};
+
+export type SaleDraftItemInput = {
+    productId: number;
+    quantity: number;
+    unitPrice: number;
+    unit?: ProductUnit;
+};
+
+export type SaleDraftInput = {
+    customerId: number | null;
+    currency: Currency;
+    discount: number;
+    paidAmount: number;
+    note: string;
+    items: SaleDraftItemInput[];
+};
+
+export type SaleDraftUpdateInput = Partial<SaleDraftInput>;
+
+export type SalesSummary = {
+    currency: Currency;
+    totalInvoiceCount: number;
+    draftInvoiceCount: number;
+    completedInvoiceCount: number;
+    cancelledInvoiceCount: number;
+    completedSalesTotal: number;
+    positiveRemainingTotal: number;
+};
+
+export type SaleInvoiceListRecord = Pick<
+    SaleInvoice,
+    | "id"
+    | "invoiceNumber"
+    | "customerId"
+    | "customerNameSnapshot"
+    | "currency"
+    | "status"
+    | "subtotal"
+    | "discount"
+    | "total"
+    | "paidAmount"
+    | "remainingAmount"
+    | "createdAt"
+    | "updatedAt"
+> & { itemCount: number };
