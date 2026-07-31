@@ -1,1 +1,5 @@
-"""SQLAlchemy domain models will be registered here."""
+"""SQLAlchemy domain models."""
+
+from app.models.product import Product
+
+__all__ = ["Product"]

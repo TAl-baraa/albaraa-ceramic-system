@@ -44,3 +44,44 @@ docker compose down
 ```
 
 To deliberately remove the named database volume as well, run `docker compose down --volumes`. This permanently removes local PostgreSQL data.
+
+## Products API
+
+Product API requests and responses use camelCase JSON names matching the frontend domain, including `minimumQuantity`, `sellPriceIqd`, `purchasePriceUsd`, `createdAt`, and `updatedAt`. Exact quantities and monetary values are returned as JSON strings so clients do not lose decimal precision; IDs and pagination counts remain JSON numbers.
+
+Create a product:
+
+```bash
+curl -X POST http://localhost:8000/api/products \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "code": "CER-001",
+    "name": "Ceramic Floor",
+    "size": "60x60",
+    "company": "Example Company",
+    "unit": "متر مربع",
+    "quantity": "25.500000",
+    "minimumQuantity": "5.000000",
+    "sellPriceIqd": "25000",
+    "purchasePriceUsd": "8.7500"
+  }'
+```
+
+List, paginate, and search products:
+
+```bash
+curl 'http://localhost:8000/api/products?page=1&pageSize=20'
+curl 'http://localhost:8000/api/products?search=CER-001'
+```
+
+Retrieve, partially update, and delete product `1`:
+
+```bash
+curl http://localhost:8000/api/products/1
+curl -X PATCH http://localhost:8000/api/products/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"minimumQuantity":"7.000000"}'
+curl -X DELETE http://localhost:8000/api/products/1
+```
+
+Product deletion is currently physical because no backend inventory or invoice relations exist. The deletion operation is isolated in the product service so it can later be replaced with archival or restricted deletion.
