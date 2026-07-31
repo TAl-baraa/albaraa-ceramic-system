@@ -291,3 +291,20 @@ npm run validate:products-api
 ```
 
 The script checks health, lists products, creates a uniquely named temporary product, retrieves it, updates metadata, and deletes it in a `finally` cleanup block. It never reads or changes browser localStorage and is not part of normal tests.
+
+### Customer and financial transaction repositories
+
+Customer and financial transaction API repositories are also prepared but remain unmounted. Their DTO layer follows the backend’s camelCase JSON exactly, including decimal strings, correction and void audit fields, invoice source linkage, and independent IQD/USD balances. Mappers convert those DTOs to the existing frontend domain types while retaining API-only timestamps, effects, running balances, and balance statuses as separate metadata.
+
+The customer repository supports search, pagination, optional balances, CRUD operations, safe all-page loading, and cancellation signals. The transaction repository supports filtered history, manual transaction creation, correction, voiding, and live balances. Public request DTOs deliberately provide no way to set `sourceType`, source IDs, void state, or correction audit fields.
+
+Local repository adapters reuse the current `albaraa-ceramic-customers` and `albaraa-ceramic-customer-transactions` keys, the existing transaction migration parser, and the existing balance replay helpers. Active debt and `payment_paid` increase balances; active credit and `payment_received` decrease them; voided records have zero effect; IQD and USD are never mixed.
+
+The active `CustomersProvider` is unchanged and continues using localStorage synchronously. API mode is not mounted because customer statements, sales invoice links, inventory, and dashboard behavior must move together to avoid mixed local/API accounting state.
+
+No mutating customer validation script is included yet: the public API correctly prevents deleting customers with transaction history, and the project has no safe development-only rollback endpoint. Unit tests use mocked requests and in-memory storage, while live validation remains read-only:
+
+```bash
+curl http://localhost:8000/api/health
+curl 'http://localhost:8000/api/customers?page=1&pageSize=20'
+```

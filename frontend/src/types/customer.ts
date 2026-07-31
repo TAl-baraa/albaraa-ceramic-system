@@ -68,3 +68,35 @@ export type CustomerTransactionCorrectionInput = {
 export type CustomerActionResult =
     | { success: true }
     | { success: false; error: string };
+
+export type CustomerUpdateInput = Partial<CustomerInput>;
+
+export type CustomerApiMetadata = {
+    updatedAt: string;
+};
+
+export type CustomerRecord = Customer & {
+    apiMetadata?: CustomerApiMetadata;
+    apiBalance?: CustomerBalanceRecord;
+};
+
+export type CustomerTransactionApiMetadata = {
+    updatedAt: string;
+    effectAmount: number;
+    runningBalance: number | null;
+};
+
+export type CustomerTransactionRecord = CustomerTransaction & {
+    apiMetadata?: CustomerTransactionApiMetadata;
+};
+
+export type CustomerBalanceStatus =
+    | "owes_store"
+    | "store_owes"
+    | "settled";
+
+export type CustomerBalanceRecord = {
+    customerId: number;
+    balances: CustomerBalance;
+    statuses: Record<Currency, CustomerBalanceStatus>;
+};

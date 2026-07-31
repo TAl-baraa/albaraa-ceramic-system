@@ -7,7 +7,6 @@ import {
 import type { ReactNode } from "react";
 
 import type {
-    Currency,
     Customer,
     CustomerActionResult,
     CustomerBalance,
@@ -15,14 +14,18 @@ import type {
     CustomerTransaction,
     CustomerTransactionCorrectionInput,
     CustomerTransactionInput,
-    EditableCustomerTransactionType,
 } from "../types/customer";
 import {
     calculateCustomerNetBalance,
     getLatestActivePaymentDate,
     recalculateAllTransactionBalances,
 } from "../utils/customerBalance";
-import { parseStoredCustomerTransaction } from "../utils/customerStorage";
+import {
+    readStoredCustomers,
+    readStoredCustomerTransactions,
+    writeStoredCustomers,
+    writeStoredCustomerTransactions,
+} from "../utils/customerStorage";
 
 type CustomersContextValue = {
     customers: Customer[];
@@ -56,100 +59,15 @@ type CustomersProviderProps = {
     children: ReactNode;
 };
 
-const CUSTOMERS_STORAGE_KEY = "albaraa-ceramic-customers";
-const TRANSACTIONS_STORAGE_KEY =
-    "albaraa-ceramic-customer-transactions";
 const CustomersContext =
     createContext<CustomersContextValue | null>(null);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function isFiniteNonNegativeNumber(value: unknown): value is number {
-    return (
-        typeof value === "number" &&
-        Number.isFinite(value) &&
-        value >= 0
-    );
-}
-
-function isCurrency(value: unknown): value is Currency {
-    return value === "IQD" || value === "USD";
-}
-
-function isEditableTransactionType(
-    value: unknown,
-): value is EditableCustomerTransactionType {
+function isEditableTransactionType(value: unknown) {
     return (
         value === "debt" ||
         value === "credit" ||
         value === "payment_received" ||
         value === "payment_paid"
     );
-}
-
-function isValidDate(value: unknown): value is string {
-    return (
-        typeof value === "string" &&
-        Number.isFinite(Date.parse(value))
-    );
-}
-
-function parseCustomer(value: unknown): Customer | null {
-    if (!isRecord(value)) {
-        return null;
-    }
-
-    if (
-        !isFiniteNonNegativeNumber(value.id) ||
-        typeof value.name !== "string" ||
-        typeof value.phone !== "string" ||
-        typeof value.address !== "string" ||
-        !isValidDate(value.createdAt) ||
-        !(
-            value.lastPaymentAt === null ||
-            isValidDate(value.lastPaymentAt)
-        ) ||
-        typeof value.notes !== "string"
-    ) {
-        return null;
-    }
-
-    return {
-        id: value.id,
-        name: value.name,
-        phone: value.phone,
-        address: value.address,
-        createdAt: value.createdAt,
-        lastPaymentAt: value.lastPaymentAt,
-        notes: value.notes,
-    };
-}
-
-function loadArray<T>(
-    storageKey: string,
-    parser: (value: unknown) => T | null,
-): T[] {
-    try {
-        const storedValue = localStorage.getItem(storageKey);
-
-        if (!storedValue) {
-            return [];
-        }
-
-        const parsedValue: unknown = JSON.parse(storedValue);
-
-        if (!Array.isArray(parsedValue)) {
-            return [];
-        }
-
-        return parsedValue
-            .map(parser)
-            .filter((item): item is T => item !== null);
-    } catch {
-        return [];
-    }
 }
 
 function normalizeAmount(amount: number) {
@@ -164,15 +82,12 @@ export function CustomersProvider({
     children,
 }: CustomersProviderProps) {
     const [customers, setCustomers] = useState<Customer[]>(() =>
-        loadArray(CUSTOMERS_STORAGE_KEY, parseCustomer),
+        readStoredCustomers(),
     );
     const [transactions, setTransactions] =
         useState<CustomerTransaction[]>(() =>
             recalculateAllTransactionBalances(
-                loadArray(
-                    TRANSACTIONS_STORAGE_KEY,
-                    parseStoredCustomerTransaction,
-                ),
+                readStoredCustomerTransactions(),
             ).toSorted(
                 (first, second) =>
                     Date.parse(second.createdAt) -
@@ -183,10 +98,7 @@ export function CustomersProvider({
 
     useEffect(() => {
         try {
-            localStorage.setItem(
-                CUSTOMERS_STORAGE_KEY,
-                JSON.stringify(customers),
-            );
+            writeStoredCustomers(customers);
         } catch {
             // Keep the in-memory customer list usable when storage fails.
         }
@@ -194,10 +106,7 @@ export function CustomersProvider({
 
     useEffect(() => {
         try {
-            localStorage.setItem(
-                TRANSACTIONS_STORAGE_KEY,
-                JSON.stringify(transactions),
-            );
+            writeStoredCustomerTransactions(transactions);
         } catch {
             // Keep the in-memory transaction history usable when storage fails.
         }
@@ -343,7 +252,7 @@ export function CustomersProvider({
             return { success: false, error: "نوع الحركة غير صالح." };
         }
 
-        if (!isCurrency(input.currency)) {
+        if (input.currency !== "IQD" && input.currency !== "USD") {
             return { success: false, error: "العملة غير صالحة." };
         }
 
