@@ -22,8 +22,20 @@ Thumbs.db
 # ملفات Python المستقبلية
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 .venv/
 venv/
+
+# بيانات قواعد البيانات وملفات التطوير المحلية
+postgres-data/
+pgdata/
+*.sqlite3
+*.db
+*.pid
 
 # النسخ الاحتياطية والملفات المرفوعة محليًا
 backups/
