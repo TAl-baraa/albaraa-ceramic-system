@@ -308,3 +308,24 @@ No mutating customer validation script is included yet: the public API correctly
 curl http://localhost:8000/api/health
 curl 'http://localhost:8000/api/customers?page=1&pageSize=20'
 ```
+
+### Inventory and stock movement repositories
+
+The inventory repository layer follows the same staged migration approach. Backend DTOs retain exact decimal strings, movement audit sources, product snapshots, timestamps, summary totals, and low-stock statuses. Strict mappers reject malformed or unsafe quantities, preserve the Arabic units `متر مربع` and `قطعة`, and enforce whole-number piece quantities when unit information is available.
+
+`ApiInventoryRepository` supports live summaries, low-stock reporting, paginated and filtered movement history, movement details, stock-in, stock-out, and adjustments. Public request mapping includes only `productId`, quantity/final quantity, and note; source linkage and previous/new quantities remain backend-controlled. All-page loading uses the backend’s 100-row limit and rejects inconsistent pagination rather than looping indefinitely.
+
+`LocalStorageInventoryRepository` reuses the existing `albaraa-ceramic-products` and `albaraa-ceramic-stock-movements` keys and the existing movement migration parser. Its summaries and mutations preserve the calculations currently used by `InventoryPage`. Movement results are enriched with current product data and safely fall back to the existing source reference and deleted-product labels when a product is unavailable.
+
+The experimental `useApiInventory` hook remains unmounted. After a successful API mutation it refreshes summary, history, and low-stock data, and can invoke an `onInventoryChanged` callback so a future coordinated API provider can refresh products. It never patches product quantity directly.
+
+The mounted `ProductsProvider`, Inventory page, sales finalization/cancellation, and dashboard remain on localStorage. Enabling inventory API mode independently would mix backend quantities with local sales and dashboard state, so the runtime switch remains disabled until those connected domains migrate together.
+
+Read-only inventory validation:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/api/inventory/summary
+curl 'http://localhost:8000/api/inventory/movements?page=1&pageSize=20'
+curl 'http://localhost:8000/api/inventory/low-stock?includeOutOfStock=true'
+```

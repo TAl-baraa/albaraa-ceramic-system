@@ -11,12 +11,15 @@ import type {
     AddStockMovementResult,
     StockMovement,
     StockMovementInput,
-    StockMovementType,
 } from "../types/stockMovement";
 import {
     readStoredProducts,
     writeStoredProducts,
 } from "../utils/productStorage";
+import {
+    readStoredStockMovements,
+    writeStoredStockMovements,
+} from "../utils/stockMovementStorage";
 
 type ProductsContextValue = {
     products: Product[];
@@ -37,106 +40,8 @@ type ProductsProviderProps = {
     children: ReactNode;
 };
 
-const MOVEMENTS_STORAGE_KEY = "albaraa-ceramic-stock-movements";
 const ProductsContext =
     createContext<ProductsContextValue | null>(null);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function isFiniteNonNegativeNumber(value: unknown): value is number {
-    return (
-        typeof value === "number" &&
-        Number.isFinite(value) &&
-        value >= 0
-    );
-}
-
-function isStockMovementType(
-    value: unknown,
-): value is StockMovementType {
-    return (
-        value === "in" ||
-        value === "out" ||
-        value === "adjustment"
-    );
-}
-
-function parseStoredMovement(value: unknown): StockMovement | null {
-    if (!isRecord(value)) {
-        return null;
-    }
-
-    if (
-        !isFiniteNonNegativeNumber(value.id) ||
-        !isFiniteNonNegativeNumber(value.productId) ||
-        !isStockMovementType(value.type) ||
-        !isFiniteNonNegativeNumber(value.quantity) ||
-        !isFiniteNonNegativeNumber(value.previousQuantity) ||
-        !isFiniteNonNegativeNumber(value.newQuantity) ||
-        typeof value.note !== "string" ||
-        typeof value.createdAt !== "string" ||
-        !Number.isFinite(Date.parse(value.createdAt))
-    ) {
-        return null;
-    }
-
-    return {
-        id: value.id,
-        productId: value.productId,
-        type: value.type,
-        quantity: value.quantity,
-        previousQuantity: value.previousQuantity,
-        newQuantity: value.newQuantity,
-        note: value.note,
-        createdAt: value.createdAt,
-        sourceType:
-            value.sourceType === "sale_invoice" ||
-            value.sourceType === "sale_invoice_cancellation"
-                ? value.sourceType
-                : "manual",
-        sourceId: isFiniteNonNegativeNumber(value.sourceId)
-            ? value.sourceId
-            : null,
-        sourceReference:
-            typeof value.sourceReference === "string"
-                ? value.sourceReference
-                : "",
-    };
-}
-
-function getStoredMovements(): StockMovement[] {
-    try {
-        const storedValue = localStorage.getItem(
-            MOVEMENTS_STORAGE_KEY,
-        );
-
-        if (!storedValue) {
-            return [];
-        }
-
-        const parsedValue: unknown = JSON.parse(storedValue);
-
-        if (!Array.isArray(parsedValue)) {
-            return [];
-        }
-
-        return parsedValue
-            .map(parseStoredMovement)
-            .filter(
-                (movement): movement is StockMovement =>
-                    movement !== null,
-            )
-            .sort(
-                (first, second) =>
-                    Date.parse(second.createdAt) -
-                    Date.parse(first.createdAt),
-            );
-    } catch {
-        return [];
-    }
-}
 
 function normalizeQuantity(quantity: number) {
     return Number(quantity.toFixed(6));
@@ -148,7 +53,7 @@ export function ProductsProvider({
     const [products, setProducts] =
         useState<Product[]>(readStoredProducts);
     const [stockMovements, setStockMovements] =
-        useState<StockMovement[]>(getStoredMovements);
+        useState<StockMovement[]>(readStoredStockMovements);
 
     useEffect(() => {
         try {
@@ -160,10 +65,7 @@ export function ProductsProvider({
 
     useEffect(() => {
         try {
-            localStorage.setItem(
-                MOVEMENTS_STORAGE_KEY,
-                JSON.stringify(stockMovements),
-            );
+            writeStoredStockMovements(stockMovements);
         } catch {
             // Keep in-memory history usable if storage is unavailable or full.
         }

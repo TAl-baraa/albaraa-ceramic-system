@@ -94,6 +94,6 @@ test("future UI error mapping provides readable Arabic messages", () => {
     );
     assert.equal(
         apiErrorToArabic(new ProductMappingError("Product quantity must be changed through the inventory movement API")),
-        "يجب تعديل كمية المنتج من خلال حركة مخزون.",
+        "يجب تعديل الكمية من خلال حركة مخزون.",
     );
 });
