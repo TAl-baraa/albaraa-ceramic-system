@@ -85,3 +85,60 @@ curl -X DELETE http://localhost:8000/api/products/1
 ```
 
 Product deletion is currently physical because no backend inventory or invoice relations exist. The deletion operation is isolated in the product service so it can later be replaced with archival or restricted deletion.
+
+## Customers and financial transactions API
+
+Customer balances are replayed from active transaction history. Positive balances mean the customer owes the store, negative balances mean the store owes the customer, and zero means settled. IQD and USD are always calculated independently. Transaction history includes active and voided records by default; use `includeVoided=false` to request active records only.
+
+Create and search customers:
+
+```bash
+curl -X POST http://localhost:8000/api/customers \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Example Customer","phone":"07700000000","address":"Baghdad","notes":""}'
+
+curl 'http://localhost:8000/api/customers?search=Example&page=1&pageSize=20&includeBalances=true'
+```
+
+Retrieve customer `1` and its independent balances:
+
+```bash
+curl 'http://localhost:8000/api/customers/1?includeBalances=true'
+curl http://localhost:8000/api/customers/1/balances
+```
+
+Add debt and a received payment:
+
+```bash
+curl -X POST http://localhost:8000/api/customers/1/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"transactionType":"debt","amount":"25000","currency":"IQD","note":"Opening debt"}'
+
+curl -X POST http://localhost:8000/api/customers/1/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"transactionType":"payment_received","amount":"10000","currency":"IQD","note":"Cash payment"}'
+```
+
+Correct transaction `1`. Its currency and source linkage are retained, the original is voided, and a linked replacement is created atomically:
+
+```bash
+curl -X POST http://localhost:8000/api/customers/1/transactions/1/correct \
+  -H 'Content-Type: application/json' \
+  -d '{"transactionType":"debt","amount":"20000","note":"Correct amount","reason":"Amount entered incorrectly"}'
+```
+
+Void transaction `2` without deleting its audit history:
+
+```bash
+curl -X POST http://localhost:8000/api/customers/1/transactions/2/void \
+  -H 'Content-Type: application/json' \
+  -d '{"reason":"Duplicate entry"}'
+```
+
+List newest-first history with chronologically calculated running balances:
+
+```bash
+curl 'http://localhost:8000/api/customers/1/transactions?includeVoided=true&includeRunningBalance=true&page=1&pageSize=20'
+```
+
+Exact transaction amounts and balances are serialized as JSON strings. IDs and pagination metadata remain JSON numbers. Invoice-linked transactions are readable but can only be created or changed by a trusted internal sales workflow.
