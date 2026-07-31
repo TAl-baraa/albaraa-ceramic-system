@@ -6,10 +6,13 @@ from fastapi.responses import JSONResponse
 
 
 class APIError(Exception):
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self, status_code: int, code: str, message: str, details: dict[str, Any] | None = None
+    ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.details = details
 
 
 class ProductNotFoundError(APIError):
@@ -112,10 +115,88 @@ class CustomerTransactionPersistenceError(APIError):
         )
 
 
+class StockMovementNotFoundError(APIError):
+    def __init__(self) -> None:
+        super().__init__(status.HTTP_404_NOT_FOUND, "stock_movement_not_found", "Stock movement not found")
+
+
+class InvalidPieceQuantityError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "invalid_piece_quantity",
+            "Quantities for products measured in pieces must be whole numbers",
+        )
+
+
+class InsufficientStockError(APIError):
+    def __init__(self, *, product_id: int, code: str, requested: Any, available: Any, unit: str) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "insufficient_stock",
+            "Requested stock exceeds the available quantity",
+            {
+                "productId": product_id,
+                "productCode": code,
+                "requestedQuantity": str(requested),
+                "availableQuantity": str(available),
+                "unit": unit,
+            },
+        )
+
+
+class NoOpStockAdjustmentError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "no_op_stock_adjustment",
+            "Adjustment final quantity must differ from current quantity",
+        )
+
+
+class UnsupportedStockSourceError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "unsupported_stock_source",
+            "Unsupported stock movement source type",
+        )
+
+
+class ProductQuantityUpdateBlockedError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "product_quantity_update_blocked",
+            "Product quantity must be changed through the inventory movement API.",
+        )
+
+
+class ProductHasStockMovementsError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "product_has_stock_movements",
+            "A product with stock movement history cannot be deleted",
+        )
+
+
+class StockMovementPersistenceError(APIError):
+    def __init__(self) -> None:
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "stock_movement_conflict",
+            "The stock movement could not be saved",
+        )
+
+
 async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
+    error: dict[str, Any] = {"code": exc.code, "message": exc.message}
+    if exc.details is not None:
+        error["details"] = exc.details
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message}},
+        content={"error": error},
     )
 
 

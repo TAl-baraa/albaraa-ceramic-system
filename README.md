@@ -142,3 +142,44 @@ curl 'http://localhost:8000/api/customers/1/transactions?includeVoided=true&incl
 ```
 
 Exact transaction amounts and balances are serialized as JSON strings. IDs and pagination metadata remain JSON numbers. Invoice-linked transactions are readable but can only be created or changed by a trusted internal sales workflow.
+
+## Inventory and stock movements API
+
+`products.quantity` remains the live stock total, but existing product quantities cannot be changed through `PATCH /api/products/{id}`. Every post-creation quantity change must use the inventory API so the quantity update and immutable movement record commit atomically. `minimumQuantity` remains editable through the product endpoint.
+
+Create manual stock-in and stock-out movements:
+
+```bash
+curl -X POST http://localhost:8000/api/inventory/movements/in \
+  -H 'Content-Type: application/json' \
+  -d '{"productId":1,"quantity":"10.500000","note":"Supplier delivery"}'
+
+curl -X POST http://localhost:8000/api/inventory/movements/out \
+  -H 'Content-Type: application/json' \
+  -d '{"productId":1,"quantity":"2.000000","note":"Damaged stock"}'
+```
+
+Set the final counted quantity with an adjustment. A nonblank note is required:
+
+```bash
+curl -X POST http://localhost:8000/api/inventory/movements/adjustment \
+  -H 'Content-Type: application/json' \
+  -d '{"productId":1,"finalQuantity":"7.750000","note":"Physical stock count"}'
+```
+
+List or search immutable movement history:
+
+```bash
+curl 'http://localhost:8000/api/inventory/movements?page=1&pageSize=20'
+curl 'http://localhost:8000/api/inventory/movements?productId=1&movementType=out'
+curl 'http://localhost:8000/api/inventory/movements?search=INV-100'
+```
+
+View live inventory totals and low-stock products:
+
+```bash
+curl http://localhost:8000/api/inventory/summary
+curl 'http://localhost:8000/api/inventory/low-stock?includeOutOfStock=true&limit=50'
+```
+
+Quantities and inventory values are returned as exact decimal strings. Public movement endpoints always create `manual` sources. Future sales services can use the non-committing internal movement method for `sale_invoice` and `sale_invoice_cancellation` records within a larger transaction.

@@ -9,8 +9,11 @@ from app.core.errors import (
     DuplicateProductCodeError,
     ProductNotFoundError,
     ProductValidationError,
+    ProductHasStockMovementsError,
+    ProductQuantityUpdateBlockedError,
 )
 from app.models.product import Product
+from app.models.stock_movement import StockMovement
 from app.schemas.product import ProductCreate, ProductUpdate
 
 
@@ -83,6 +86,8 @@ def get_product(db: Session, product_id: int) -> Product:
 
 def update_product(db: Session, product_id: int, product_data: ProductUpdate) -> Product:
     product = get_product(db, product_id)
+    if "quantity" in product_data.model_fields_set:
+        raise ProductQuantityUpdateBlockedError()
     changes = product_data.model_dump(exclude_unset=True)
     if not changes:
         return product
@@ -118,7 +123,12 @@ def update_product(db: Session, product_id: int, product_data: ProductUpdate) ->
 
 
 def delete_product(db: Session, product_id: int) -> None:
-    """Physically delete a product until related domain records exist."""
+    """Physically delete only products without immutable stock history."""
     product = get_product(db, product_id)
+    has_movements = db.scalar(
+        select(StockMovement.id).where(StockMovement.product_id == product_id).limit(1)
+    )
+    if has_movements is not None:
+        raise ProductHasStockMovementsError()
     db.delete(product)
     _commit(db)
