@@ -107,7 +107,7 @@ function InventoryPage() {
         resetMovementForm();
     }
 
-    function handleMovementSubmit(
+    async function handleMovementSubmit(
         event: FormEvent<HTMLFormElement>,
     ) {
         event.preventDefault();
@@ -153,7 +153,7 @@ function InventoryPage() {
             return;
         }
 
-        const result = addStockMovement({
+        const result = await addStockMovement({
             productId: selectedProduct.id,
             type: movementType,
             quantity,

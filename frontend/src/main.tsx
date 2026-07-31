@@ -7,17 +7,19 @@ import { CustomersProvider } from "./context/CustomersContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { SalesProvider } from "./context/SalesContext";
 import "./index.css";
+import { ApiStartupGate } from "./components/system/ApiStartupGate";
+import { BusinessDataGate } from "./components/system/BusinessDataGate";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <ProductsProvider>
+      <ApiStartupGate><ProductsProvider>
         <CustomersProvider>
           <SalesProvider>
-            <App />
+            <BusinessDataGate><App /></BusinessDataGate>
           </SalesProvider>
         </CustomersProvider>
-      </ProductsProvider>
+      </ProductsProvider></ApiStartupGate>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -275,7 +275,7 @@ function CustomersPage() {
         resetCustomerForm();
     }
 
-    function handleCustomerSubmit(
+    async function handleCustomerSubmit(
         event: FormEvent<HTMLFormElement>,
     ) {
         event.preventDefault();
@@ -291,9 +291,9 @@ function CustomersPage() {
             address: customerAddress,
             notes: customerNotes,
         };
-        const result = customerToEdit
+        const result = await (customerToEdit
             ? updateCustomer(customerToEdit.id, input)
-            : addCustomer(input);
+            : addCustomer(input));
 
         if (!result.success) {
             setCustomerFormError(result.error);
@@ -321,12 +321,12 @@ function CustomersPage() {
         setCustomerToDelete(customer);
     }
 
-    function handleCustomerDeletion() {
+    async function handleCustomerDeletion() {
         if (!customerToDelete) {
             return;
         }
 
-        const result = deleteCustomer(customerToDelete.id);
+        const result = await deleteCustomer(customerToDelete.id);
 
         if (!result.success) {
             setActionError(result.error);
@@ -363,7 +363,7 @@ function CustomersPage() {
         setSelectedCustomerId(customerId);
     }
 
-    function handleTransactionSubmit(
+    async function handleTransactionSubmit(
         event: FormEvent<HTMLFormElement>,
     ) {
         event.preventDefault();
@@ -384,7 +384,7 @@ function CustomersPage() {
             return;
         }
 
-        const result = addTransaction({
+        const result = await addTransaction({
             customerId: selectedCustomer.id,
             type: transactionType,
             amount,
@@ -683,8 +683,8 @@ function CustomersPage() {
                     <CorrectionDialog
                         transaction={transactionToCorrect}
                         onClose={() => setTransactionToCorrect(null)}
-                        onSubmit={(input) => {
-                            const result = correctTransaction(input);
+                        onSubmit={async (input) => {
+                            const result = await correctTransaction(input);
 
                             if (result.success) {
                                 setTransactionToCorrect(null);
@@ -701,8 +701,8 @@ function CustomersPage() {
                     <VoidTransactionDialog
                         transaction={transactionToVoid}
                         onClose={() => setTransactionToVoid(null)}
-                        onConfirm={(reason) => {
-                            const result = voidTransaction(
+                        onConfirm={async (reason) => {
+                            const result = await voidTransaction(
                                 transactionToVoid.id,
                                 reason,
                             );
@@ -1229,7 +1229,7 @@ function CorrectionDialog({
     onClose: () => void;
     onSubmit: (
         input: CustomerTransactionCorrectionInput,
-    ) => CustomerActionResult;
+    ) => Promise<CustomerActionResult>;
 }) {
     const [type, setType] =
         useState<EditableCustomerTransactionType>(
@@ -1244,7 +1244,7 @@ function CorrectionDialog({
     const [reason, setReason] = useState("");
     const [error, setError] = useState("");
 
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const numericAmount = Number(amount);
 
@@ -1258,7 +1258,7 @@ function CorrectionDialog({
             return;
         }
 
-        const result = onSubmit({
+        const result = await onSubmit({
             transactionId: transaction.id,
             type,
             amount: numericAmount,
@@ -1410,12 +1410,12 @@ function VoidTransactionDialog({
 }: {
     transaction: CustomerTransaction;
     onClose: () => void;
-    onConfirm: (reason: string) => CustomerActionResult;
+    onConfirm: (reason: string) => Promise<CustomerActionResult>;
 }) {
     const [reason, setReason] = useState("");
     const [error, setError] = useState("");
 
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
         if (!reason.trim()) {
@@ -1423,7 +1423,7 @@ function VoidTransactionDialog({
             return;
         }
 
-        const result = onConfirm(reason);
+        const result = await onConfirm(reason);
 
         if (!result.success) {
             setError(result.error);

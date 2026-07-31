@@ -563,7 +563,7 @@ export function SaleInvoiceEditor({
         return true;
     }
 
-    function saveDraft(mode: SaveMode) {
+    async function saveDraft(mode: SaveMode) {
         if (!validateForm()) {
             return;
         }
@@ -608,7 +608,7 @@ export function SaleInvoiceEditor({
                 total: calculateLineTotal(quantity, unitPrice),
             };
         });
-        const result = saveDraftInvoice(invoice, savedItems);
+        const result = await saveDraftInvoice(invoice, savedItems);
 
         if (!result.success) {
             setFormError(result.error);
@@ -656,8 +656,8 @@ export function SaleInvoiceEditor({
         setShowFinalizeConfirmation(true);
     }
 
-    function finalizeInvoice() {
-        const result = completeDraftInvoice(stableInvoiceId);
+    async function finalizeInvoice() {
+        const result = await completeDraftInvoice(stableInvoiceId);
 
         if (!result.success) {
             setFormError(result.error);

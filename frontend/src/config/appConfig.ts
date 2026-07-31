@@ -18,7 +18,7 @@ export function resolveAppConfig(environment: Environment): AppConfig {
     const requestedSource = environment.VITE_DATA_SOURCE;
     return {
         apiBaseUrl: normalizeApiBaseUrl(environment.VITE_API_BASE_URL as string | undefined),
-        dataSource: requestedSource === "api" ? "api" : "localStorage",
+        dataSource: requestedSource === "localStorage" ? "localStorage" : "api",
     };
 }
 

@@ -87,12 +87,12 @@ function SalesPage() {
                 second.id - first.id,
         );
 
-    function confirmDraftDeletion() {
+    async function confirmDraftDeletion() {
         if (!invoiceToDelete) {
             return;
         }
 
-        const result = deleteDraftInvoice(invoiceToDelete.id);
+        const result = await deleteDraftInvoice(invoiceToDelete.id);
 
         if (!result.success) {
             setActionError(result.error);

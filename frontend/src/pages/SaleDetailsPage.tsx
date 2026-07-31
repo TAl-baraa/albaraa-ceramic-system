@@ -85,12 +85,12 @@ function SaleDetailsPage() {
         );
     }
 
-    function finalizeInvoice() {
+    async function finalizeInvoice() {
         if (!invoice) {
             return;
         }
 
-        const result = completeDraftInvoice(invoice.id);
+        const result = await completeDraftInvoice(invoice.id);
 
         if (!result.success) {
             setCompletionError(result.error);
@@ -127,12 +127,12 @@ function SaleDetailsPage() {
         window.print();
     }
 
-    function cancelInvoice(reason: string) {
+    async function cancelInvoice(reason: string) {
         if (!invoice) {
             return;
         }
 
-        const result = cancelCompletedInvoice(invoice.id, reason);
+        const result = await cancelCompletedInvoice(invoice.id, reason);
 
         if (!result.success) {
             setCancellationError(result.error);

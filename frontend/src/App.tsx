@@ -9,6 +9,7 @@ import NewSalePage from "./pages/NewSalePage";
 import SaleDetailsPage from "./pages/SaleDetailsPage";
 import SalesPage from "./pages/SalesPage";
 import SettingsPage from "./pages/SettingsPage";
+import ClearLocalDataPage from "./pages/ClearLocalDataPage";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           element={<CustomerStatementPage />}
         />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/maintenance/clear-local-data" element={<ClearLocalDataPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

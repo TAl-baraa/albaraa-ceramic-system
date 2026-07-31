@@ -3,10 +3,10 @@ import test from "node:test";
 
 import { normalizeApiBaseUrl, resolveAppConfig } from "../src/config/appConfig.ts";
 
-test("configuration defaults safely to localStorage", () => {
+test("configuration defaults to the authoritative API", () => {
     assert.deepEqual(resolveAppConfig({}), {
         apiBaseUrl: "http://localhost:8000/api",
-        dataSource: "localStorage",
+        dataSource: "api",
     });
 });
 
@@ -21,6 +21,6 @@ test("configuration accepts API mode and normalizes its base URL", () => {
     assert.equal(normalizeApiBaseUrl("http://localhost:8000/api/"), "http://localhost:8000/api");
 });
 
-test("unsupported data sources fall back to localStorage", () => {
-    assert.equal(resolveAppConfig({ VITE_DATA_SOURCE: "database" }).dataSource, "localStorage");
+test("unsupported data sources never silently enable localStorage", () => {
+    assert.equal(resolveAppConfig({ VITE_DATA_SOURCE: "database" }).dataSource, "api");
 });
