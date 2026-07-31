@@ -6,14 +6,17 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
-import { initialProducts } from "../data/initialProducts";
-import type { Product, ProductUnit } from "../types/product";
+import type { Product } from "../types/product";
 import type {
     AddStockMovementResult,
     StockMovement,
     StockMovementInput,
     StockMovementType,
 } from "../types/stockMovement";
+import {
+    readStoredProducts,
+    writeStoredProducts,
+} from "../utils/productStorage";
 
 type ProductsContextValue = {
     products: Product[];
@@ -34,11 +37,6 @@ type ProductsProviderProps = {
     children: ReactNode;
 };
 
-type StoredProduct = Partial<Product> & {
-    initialQuantity?: unknown;
-};
-
-const STORAGE_KEY = "albaraa-ceramic-products";
 const MOVEMENTS_STORAGE_KEY = "albaraa-ceramic-stock-movements";
 const ProductsContext =
     createContext<ProductsContextValue | null>(null);
@@ -53,10 +51,6 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
         Number.isFinite(value) &&
         value >= 0
     );
-}
-
-function isProductUnit(value: unknown): value is ProductUnit {
-    return value === "متر مربع" || value === "قطعة";
 }
 
 function isStockMovementType(
@@ -112,70 +106,6 @@ function parseStoredMovement(value: unknown): StockMovement | null {
     };
 }
 
-function migrateStoredProduct(value: unknown): Product | null {
-    if (!isRecord(value)) {
-        return null;
-    }
-
-    const storedProduct: StoredProduct = value;
-    const quantity =
-        storedProduct.quantity ?? storedProduct.initialQuantity;
-
-    if (
-        !isFiniteNonNegativeNumber(storedProduct.id) ||
-        typeof storedProduct.code !== "string" ||
-        typeof storedProduct.name !== "string" ||
-        typeof storedProduct.size !== "string" ||
-        typeof storedProduct.company !== "string" ||
-        !isProductUnit(storedProduct.unit) ||
-        !isFiniteNonNegativeNumber(quantity) ||
-        !isFiniteNonNegativeNumber(storedProduct.minimumQuantity) ||
-        !isFiniteNonNegativeNumber(storedProduct.sellPriceIqd) ||
-        !isFiniteNonNegativeNumber(storedProduct.purchasePriceUsd)
-    ) {
-        return null;
-    }
-
-    return {
-        id: storedProduct.id,
-        code: storedProduct.code,
-        name: storedProduct.name,
-        size: storedProduct.size,
-        company: storedProduct.company,
-        unit: storedProduct.unit,
-        quantity,
-        minimumQuantity: storedProduct.minimumQuantity,
-        sellPriceIqd: storedProduct.sellPriceIqd,
-        purchasePriceUsd: storedProduct.purchasePriceUsd,
-    };
-}
-
-function getStoredProducts(): Product[] {
-    try {
-        const storedValue = localStorage.getItem(STORAGE_KEY);
-
-        if (!storedValue) {
-            return initialProducts;
-        }
-
-        const parsedValue: unknown = JSON.parse(storedValue);
-
-        if (!Array.isArray(parsedValue)) {
-            return initialProducts;
-        }
-
-        const products = parsedValue
-            .map(migrateStoredProduct)
-            .filter((product): product is Product => product !== null);
-
-        return products.length > 0 || parsedValue.length === 0
-            ? products
-            : initialProducts;
-    } catch {
-        return initialProducts;
-    }
-}
-
 function getStoredMovements(): StockMovement[] {
     try {
         const storedValue = localStorage.getItem(
@@ -216,16 +146,13 @@ export function ProductsProvider({
     children,
 }: ProductsProviderProps) {
     const [products, setProducts] =
-        useState<Product[]>(getStoredProducts);
+        useState<Product[]>(readStoredProducts);
     const [stockMovements, setStockMovements] =
         useState<StockMovement[]>(getStoredMovements);
 
     useEffect(() => {
         try {
-            localStorage.setItem(
-                STORAGE_KEY,
-                JSON.stringify(products),
-            );
+            writeStoredProducts(products);
         } catch {
             // Keep in-memory state usable if storage is unavailable or full.
         }

@@ -12,3 +12,15 @@ export type Product = {
     sellPriceIqd: number;
     purchasePriceUsd: number;
 };
+
+export type ProductCreateInput = Omit<Product, "id">;
+export type ProductUpdateInput = Partial<ProductCreateInput>;
+
+export type ProductApiMetadata = {
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ProductRecord = Product & {
+    apiMetadata?: ProductApiMetadata;
+};

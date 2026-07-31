@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "validate:products-api": "node --experimental-strip-types scripts/validate-products-api.ts",
     "preview": "vite preview"
   },
   "dependencies": {

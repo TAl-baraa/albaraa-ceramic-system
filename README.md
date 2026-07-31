@@ -262,3 +262,32 @@ curl 'http://localhost:8000/api/sales/summary?currency=IQD'
 ```
 
 Sales summary totals include only currently completed invoices. Drafts and cancelled invoices are excluded, positive remaining balances are summed without allowing overpayments to reduce them, and IQD/USD are never converted.
+
+## Frontend data-source architecture
+
+The live React application still uses localStorage by default. Its existing product, inventory, sales, and dashboard behavior remains connected to the same `albaraa-ceramic-products` storage key. A typed API client and product repository layer now exist alongside that implementation, but the API-backed hook is deliberately not mounted because switching products alone would mix API products with localStorage inventory movements, invoices, and dashboard calculations.
+
+Copy the example configuration only when local overrides are needed:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Available settings:
+
+```dotenv
+VITE_API_BASE_URL=http://localhost:8000/api
+VITE_DATA_SOURCE=localStorage
+```
+
+`VITE_DATA_SOURCE` accepts `localStorage` or `api`. Missing or unsupported values safely select `localStorage`; API mode must not be enabled for the live application until all interconnected contexts are migrated together. The base URL is normalized centrally, so components do not hard-code backend addresses.
+
+Run the opt-in products API validation script against a running backend:
+
+```bash
+cd frontend
+npm run validate:products-api
+```
+
+The script checks health, lists products, creates a uniquely named temporary product, retrieves it, updates metadata, and deletes it in a `finally` cleanup block. It never reads or changes browser localStorage and is not part of normal tests.
