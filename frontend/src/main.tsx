@@ -4,23 +4,14 @@ import { BrowserRouter } from "react-router-dom";
 import "@fontsource-variable/noto-naskh-arabic/wght.css";
 
 import App from "./App";
-import { CustomersProvider } from "./context/CustomersContext";
-import { ProductsProvider } from "./context/ProductsContext";
-import { SalesProvider } from "./context/SalesContext";
 import "./index.css";
 import { ApiStartupGate } from "./components/system/ApiStartupGate";
-import { BusinessDataGate } from "./components/system/BusinessDataGate";
+import { AuthProvider } from "./context/AuthContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <ApiStartupGate><ProductsProvider>
-        <CustomersProvider>
-          <SalesProvider>
-            <BusinessDataGate><App /></BusinessDataGate>
-          </SalesProvider>
-        </CustomersProvider>
-      </ProductsProvider></ApiStartupGate>
+      <ApiStartupGate><AuthProvider><App /></AuthProvider></ApiStartupGate>
     </BrowserRouter>
   </StrictMode>,
 );

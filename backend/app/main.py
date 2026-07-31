@@ -8,7 +8,7 @@ from app.core.errors import APIError, api_error_handler, validation_error_handle
 
 settings = get_settings()
 
-app = FastAPI(title=settings.APP_NAME, version="0.1.0")
+app = FastAPI(title=settings.APP_NAME, version="0.1.0", docs_url=None if settings.APP_ENV == "production" else "/docs", openapi_url=None if settings.APP_ENV == "production" else "/openapi.json")
 app.add_exception_handler(APIError, api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_middleware(

@@ -7,7 +7,9 @@ export type AppConfig = {
 
 type Environment = Record<string, string | boolean | undefined>;
 
-const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
+const DEFAULT_API_BASE_URL = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env?.PROD
+    ? "/api"
+    : "http://localhost:8000/api";
 
 export function normalizeApiBaseUrl(value: string | undefined): string {
     const trimmed = value?.trim();

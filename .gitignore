@@ -38,5 +38,6 @@ pgdata/
 *.pid
 
 # النسخ الاحتياطية والملفات المرفوعة محليًا
-backups/
+backups/postgres/*
+!backups/postgres/.gitkeep
 uploads/

@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { LogOut } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 const menuItems = [
     {
@@ -75,6 +78,8 @@ const pageTitles: Record<string, { title: string; description: string }> = {
 function AdminLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
+    const auth = useAuth();
 
     const currentPage =
         pageTitles[location.pathname] ??
@@ -174,6 +179,7 @@ function AdminLayout() {
 
                             <ChevronDown size={17} className="text-slate-400" />
                         </button>
+                        <button type="button" onClick={()=>void auth.logout().then(()=>navigate("/login",{replace:true}))} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-red-700"><LogOut size={18}/><span>تسجيل الخروج</span></button>
                     </header>
 
                     <main className="flex-1 p-4 sm:p-6 lg:p-8">

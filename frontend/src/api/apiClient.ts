@@ -46,6 +46,10 @@ export type ApiClient = {
 };
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+let csrfToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+export function setApiCsrfToken(token: string | null): void { csrfToken = token; }
+export function setApiUnauthorizedHandler(handler: (() => void) | null): void { unauthorizedHandler = handler; }
 
 function errorKind(status: number): ApiErrorKind {
     if (status === 404) return "not_found";
@@ -78,13 +82,14 @@ function createUrl(
     path: string,
     query?: Record<string, QueryValue>,
 ): string {
-    const url = new URL(`${baseUrl}/${path.replace(/^\/+/, "")}`);
+    const joined = `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+    const url = new URL(joined, typeof window === "undefined" ? "http://localhost" : window.location.origin);
     Object.entries(query ?? {}).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
             url.searchParams.set(key, String(value));
         }
     });
-    return url.toString();
+    return /^https?:\/\//.test(baseUrl) ? url.toString() : `${url.pathname}${url.search}`;
 }
 
 export function createApiClient(
@@ -112,8 +117,12 @@ export function createApiClient(
                 createUrl(baseUrl.replace(/\/+$/, ""), path, options.query),
                 {
                     method,
+                    credentials: "include",
                     signal: controller.signal,
-                    headers: hasBody ? { "Content-Type": "application/json" } : undefined,
+                    headers: {
+                        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+                        ...(["POST", "PATCH", "DELETE"].includes(method) && csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+                    },
                     body: hasBody ? JSON.stringify(options.body) : undefined,
                 },
             );
@@ -129,6 +138,7 @@ export function createApiClient(
                 }
             }
             if (!response.ok) {
+                if (response.status === 401) unauthorizedHandler?.();
                 const structured = parseErrorPayload(parsed);
                 throw new ApiError({
                     status: response.status,

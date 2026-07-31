@@ -356,3 +356,26 @@ docker compose exec backend python scripts/reset_business_data.py --confirm-rese
 ```
 
 The script displays row counts, requires the exact flag, refuses production, resets business-table identities, and preserves Alembic history. After starting services, smoke-test product creation, stock-in, customer creation, draft creation, completion, cancellation, invoice print, and customer statement print.
+
+## Production deployment runbook
+
+Generate the administrator password hash interactively, then place only the hash in `backend/.env`:
+
+```bash
+docker compose run --rm backend python scripts/hash_password.py
+openssl rand -hex 32
+```
+
+Copy `backend/.env.example` to `backend/.env`, set the PostgreSQL values, `ADMIN_USERNAME`, generated `ADMIN_PASSWORD_HASH`, generated `AUTH_SECRET_KEY`, cookie settings, and expiry. Never commit this file. Start and validate:
+
+```bash
+docker compose up -d --build
+docker compose exec backend alembic upgrade head
+docker compose ps
+docker compose logs -f backend frontend
+./scripts/smoke-test.sh
+```
+
+Open `http://localhost:8080` and sign in. Create a backup with `./scripts/backup-postgres.sh`. Restore only after reviewing the warning with `./scripts/restore-postgres.sh backups/postgres/FILE.dump --confirm-restore`. To update, back up first, pull/deploy changes, rebuild, and run Alembic. Stop with `docker compose down` (do not add `-v`).
+
+For external HTTPS, point Cloudflare or Nginx Proxy Manager at `http://localhost:8080`. Do not expose PostgreSQL or proxy port 8000 separately.

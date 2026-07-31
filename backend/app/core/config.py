@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "Al-Baraa Ceramic Management API"
     APP_ENV: str = "development"
     API_PREFIX: str = "/api"
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD_HASH: str = ""
+    AUTH_SECRET_KEY: str = ""
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    AUTH_COOKIE_SECURE: bool = False
+    AUTH_COOKIE_NAME: str = "albaraa_session"
 
     POSTGRES_USER: str = "ceramic_user"
     POSTGRES_PASSWORD: str = "change_this_password"
@@ -42,6 +48,13 @@ class Settings(BaseSettings):
                 port=self.POSTGRES_PORT,
                 database=self.POSTGRES_DB,
             ).render_as_string(hide_password=False)
+        if self.APP_ENV.lower() in {"production", "prod"}:
+            if not self.ADMIN_PASSWORD_HASH or self.ADMIN_PASSWORD_HASH == "replace_with_generated_hash":
+                raise ValueError("ADMIN_PASSWORD_HASH must be configured in production")
+            if len(self.AUTH_SECRET_KEY) < 32 or self.AUTH_SECRET_KEY == "replace_with_long_random_secret":
+                raise ValueError("AUTH_SECRET_KEY must be a strong production secret")
+            if not self.AUTH_COOKIE_SECURE:
+                raise ValueError("AUTH_COOKIE_SECURE must be enabled in production")
         return self
 
 
